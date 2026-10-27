@@ -1,0 +1,110 @@
+[
+  {
+    "original_filename": "script_28_wind_expositionsindex.py",
+    "reference_file": "reference/01_wind_exposure.py.txt",
+    "original_sha256": "69f02a70eec003443df23ab138546cf17c5f4ead2669a3c265781b77473cd4e4",
+    "published_sha256": "5a88513c1430981c78c3c5a995e099b406cb555f7b0401e0f0bd30fe108bb553",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_29_baeume_ndom1_v2.py",
+    "reference_file": "reference/02_tree_height_estimation.py.txt",
+    "original_sha256": "6e465196d53e373bca5f2b38ab597a775c49cefb07bc5bfd30ee0ac0faa5413a",
+    "published_sha256": "745c5e842374d3338b9fbb73824ffe43ed328228cde05aabc05efa0d50fe6f4d",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_32_neue_gpkg_22072026.py",
+    "reference_file": "reference/03_summer_shade_utci.py.txt",
+    "original_sha256": "652e72ad6d0268d0ec3c63c8f7b21bec016c63603dd0f94fae4ce3aefe2a152d",
+    "published_sha256": "0f4d9a4ff9cf34738b57c3053456c7f72a7399c1ce4c1a6d4080dd30c9c047a3",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_34_bodenbelag.py",
+    "reference_file": "reference/04_surface_classification.py.txt",
+    "original_sha256": "8879883c27b4bda5c253417463012eb1d3bb4dd99e3bef41c2279596bd39f35f",
+    "published_sha256": "e9afc06b5e4b007bf23acee24e08b7131d2725a32ac476488811bb710d5be913",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_36_laerm_v2.py",
+    "reference_file": "reference/05_noise_assignment.py.txt",
+    "original_sha256": "2b48efb92fb121f0804166d5c48f4ed890cbef97116c45edcf69b2420e2edb05",
+    "published_sha256": "d06beef2a1109b4d4a3f88f5877add9f716f4391b8b7d0b3e4ce25e7336b55e4",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_37_winterschatten_v5.py",
+    "reference_file": "reference/06_winter_shade.py.txt",
+    "original_sha256": "18009aca3ce14a0b358aac4e698bf57b8097e93256855fa602cf51bb8c965df5",
+    "published_sha256": "c627abdea69f76b717806d19409531f8b3eaf87234d57706050b93f4b7557832",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_38_winter_utci.py",
+    "reference_file": "reference/07_winter_utci.py.txt",
+    "original_sha256": "5704fca9a0a57bad36ffac2f3fd47397c5ebbdbe52939aaeda3ae3e3f6f39172",
+    "published_sha256": "2e51652704a389281e4ec7e53cc72af8425fc80c633dab3d632b296bf7b029df",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "script_39_treppen_ketten_merge.py",
+    "reference_file": "reference/08_stair_chain_merge.py.txt",
+    "original_sha256": "1cf0d7d1843dd48ca107574243626d7db0268fbf2deb5feecc733aad7d3a6b14",
+    "published_sha256": "072b26312ddd3f765327629da27eb13a492293d40264fd27616589603b8a0a4b",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  },
+  {
+    "original_filename": "PedestrianAtlas_FINAL_ATTRIBUTE_SPEC_15092026.py",
+    "reference_file": "reference/09_final_attribute_spec.py.txt",
+    "original_sha256": "81ff5e6322ddefa7cf28b1e2ffe19dd41909e183b0569234bd30c9a9958aa406",
+    "published_sha256": "e83f34a552b1c729cc02340f70e83db875c7a09b755538701d12557fe50d080f",
+    "modifications": [
+      "Internal absolute paths replaced",
+      "Review banner added",
+      "Unsupported claims annotated where present"
+    ],
+    "status": "Historical reference; not verified as exact final production version"
+  }
+]

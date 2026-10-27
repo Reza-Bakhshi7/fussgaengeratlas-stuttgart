@@ -1,0 +1,463 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_32_neue_gpkg_22072026.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+"""
+Script 32 — Neue GPKG 22072026 erstellen + Schatten + UTCI aktualisieren
+Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+Stand: 22.07.2026
+
+Quelle:  Fussgaengeratlas_17072026.gpkg (wird NICHT verändert)
+Ziel:    Fussgaengeratlas_22072026.gpkg (neu erstellt)
+
+Schritte:
+  1. Alle Layer von 17072026 → 22072026 kopieren (inkl. layer_styles)
+  2. Schattenberechnung neu (Baeume_Stuttgart.gpkg, nDOM1-Höhen)
+  3. UTCI neu berechnen (konsistent mit neuen shadow_pct-Werten)
+
+Ausführung: OSGeo4W Shell (QGIS geschlossen)
+Benötigt: pythermalcomfort (pip install pythermalcomfort --break-system-packages)
+"""
+
+import os, math, sqlite3
+import numpy as np
+import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Point
+from shapely.ops import unary_union
+from shapely.affinity import translate
+from shapely.strtree import STRtree
+from osgeo import gdal
+from pythermalcomfort.models import utci as calc_utci
+
+gdal.UseExceptions()
+
+# ==============================================================================
+# PFADE
+# ==============================================================================
+
+ROOT        = r"<LOCAL_PATH>/Projekt"
+GPKG_SOURCE = os.path.join(ROOT, r"Daten\Final\Fussgaengeratlas_17072026.gpkg")
+GPKG_NEW    = os.path.join(ROOT, r"Daten\Final\Fussgaengeratlas_22072026.gpkg")
+BAEUME_GPKG = os.path.join(ROOT, r"Weiterentwicklung\Zusätzliche_Daten\Baeume\Baeume_Stuttgart.gpkg")
+NDOM1_VRT   = os.path.join(ROOT, r"Weiterentwicklung\Zusätzliche_Daten\Baeume\nDOM1_LGL_BW\ndom1_stuttgart.vrt")
+GEBAEUDE_PATH = os.path.join(ROOT, r"Daten\Sonstige\OSM\gebaeude_hoehe2.gpkg")
+FOREST_PATH   = os.path.join(ROOT, r"Daten\Sonstige\OSM\forest_gis_osm_landuse_a_free_stuttgart.gpkg")
+
+# ==============================================================================
+# PARAMETER
+# ==============================================================================
+
+TILES_X, TILES_Y       = 4, 4
+BUFFER                 = 300
+ELEVATION_MIN          = 5.0
+LAT_DEG                = 48.775
+GEBAEUDE_HOEHE_STD     = 9.0
+STOCKWERK_HOEHE        = 3.0
+KRONENANSATZ_FAKTOR    = 0.40
+CROWN_THRESHOLD_FACTOR = 0.30
+MAX_CROWN_RADIUS_PX    = 8
+MIN_CROWN_RADIUS       = 1.0
+ZEITPUNKTE             = [8, 10, 12, 14, 16, 18]
+
+# UTCI Parameter
+TA          = 35.0
+V           = 1.0
+RH          = 35.0
+DELTA_SHADE = 5.0
+ELEVATIONS  = [17.4, 37.0, 55.4, 64.7, 55.4, 37.0]
+
+# ==============================================================================
+# HILFSFUNKTIONEN
+# ==============================================================================
+
+def list_layers(gpkg):
+    con = sqlite3.connect(gpkg)
+    cur = con.cursor()
+    cur.execute("SELECT table_name FROM gpkg_contents WHERE data_type='features'")
+    layers = [r[0] for r in cur.fetchall()]
+    con.close()
+    return layers
+
+def sonnenposition(h, monat=6, tag=21):
+    utc  = h - 2
+    lat  = math.radians(LAT_DEG)
+    doy  = sum([31,28,31,30,31,30][:monat-1]) + tag
+    decl = math.radians(23.45 * math.sin(math.radians(360/365*(doy-81))))
+    ha   = math.radians(15*(utc-12))
+    sinE = math.sin(lat)*math.sin(decl) + math.cos(lat)*math.cos(decl)*math.cos(ha)
+    elev = math.degrees(math.asin(max(-1, min(1, sinE))))
+    cosAz = ((math.sin(decl) - math.sin(lat)*sinE) /
+             (math.cos(lat)*math.cos(math.radians(max(elev, 0.01))) + 1e-10))
+    az = math.degrees(math.acos(max(-1, min(1, cosAz))))
+    if ha > 0:
+        az = 360 - az
+    return az, elev
+
+def gebaeude_schatten(footprint, hoehe, az, elev):
+    if elev < ELEVATION_MIN or not footprint.is_valid or footprint.is_empty:
+        return None
+    sl = hoehe / math.tan(math.radians(elev))
+    sr = math.radians((az + 180) % 360)
+    dx = sl * math.sin(sr)
+    dy = sl * math.cos(sr)
+    return unary_union([footprint, translate(footprint, xoff=dx, yoff=dy)]).convex_hull
+
+def baum_schatten_polygon(x, y, krone_r, hoehe, az, elev):
+    if elev < ELEVATION_MIN:
+        return None
+    el_rad       = math.radians(elev)
+    kronenansatz = hoehe * KRONENANSATZ_FAKTOR
+    sl_ansatz    = kronenansatz / math.tan(el_rad)
+    sl_spitze    = hoehe / math.tan(el_rad)
+    sr           = math.radians((az + 180) % 360)
+    dx_a = sl_ansatz * math.sin(sr); dy_a = sl_ansatz * math.cos(sr)
+    dx_s = sl_spitze * math.sin(sr); dy_s = sl_spitze * math.cos(sr)
+    return unary_union([
+        Point(x + dx_a, y + dy_a).buffer(krone_r),
+        Point(x + dx_s, y + dy_s).buffer(krone_r * 0.3),
+        Point(x, y).buffer(krone_r)
+    ])
+
+def calc_crown_radius_ndom1(band, gt, x, y, height_calc, raster_xsize, raster_ysize):
+    if height_calc is None or height_calc <= 0:
+        return MIN_CROWN_RADIUS
+    threshold = height_calc * CROWN_THRESHOLD_FACTOR
+    px_w      = gt[1]
+    px_h      = -gt[5]
+    col_i     = int((x - gt[0]) / px_w)
+    row_i     = int((gt[3] - y) / px_h)
+    win_r     = MAX_CROWN_RADIUS_PX + 1
+    col_off   = col_i - win_r
+    row_off   = row_i - win_r
+    win_size  = win_r * 2 + 1
+    if (col_off < 0 or row_off < 0
+            or col_off + win_size > raster_xsize
+            or row_off + win_size > raster_ysize):
+        return MIN_CROWN_RADIUS
+    data = band.ReadAsArray(col_off, row_off, win_size, win_size).astype(float)
+    if data is None:
+        return MIN_CROWN_RADIUS
+    nrows, ncols = data.shape
+    r_idx, c_idx = np.meshgrid(range(nrows), range(ncols), indexing='ij')
+    dist    = np.sqrt((r_idx - win_r)**2 + (c_idx - win_r)**2)
+    crown_r = MIN_CROWN_RADIUS
+    for r in range(1, MAX_CROWN_RADIUS_PX + 1):
+        ring_mask = (dist >= r - 0.5) & (dist < r + 0.5)
+        ring_vals = data[ring_mask]
+        if len(ring_vals) > 0 and np.any(ring_vals >= threshold):
+            crown_r = float(r)
+    return crown_r
+
+def get_baum_hoehe(row):
+    try:
+        h = float(row['height'])
+        if h > 0:
+            return h
+    except (TypeError, ValueError):
+        pass
+    hc = row.get('height_calculated', None)
+    return hc if hc and hc > 0 else None
+
+def get_geb_hoehe(feat, felder):
+    try:
+        if 'hoehe_m' in felder and feat['hoehe_m']:
+            return float(feat['hoehe_m'])
+    except (TypeError, ValueError):
+        pass
+    try:
+        if 'stockwerke' in felder and feat['stockwerke']:
+            return float(feat['stockwerke']) * STOCKWERK_HOEHE
+    except (TypeError, ValueError):
+        pass
+    return GEBAEUDE_HOEHE_STD
+
+def classify_utci(u):
+    if pd.isna(u):  return None
+    if u < 26:      return 'no_stress'
+    if u < 32:      return 'moderate'
+    if u < 38:      return 'strong'
+    if u < 46:      return 'very_strong'
+    return 'extreme'
+
+def delta_sun(elev):
+    return max(10.0, 28.0 - 0.28 * elev)
+
+# ==============================================================================
+# SCHRITT 1: Alle Layer von 17072026 → 22072026 kopieren
+# ==============================================================================
+
+print("=== Schritt 1: Layer kopieren 17072026 → 22072026 ===")
+
+if os.path.exists(GPKG_NEW):
+    os.remove(GPKG_NEW)
+    print(f"  Bestehende {os.path.basename(GPKG_NEW)} gelöscht")
+
+layers = list_layers(GPKG_SOURCE)
+print(f"  {len(layers)} Layer gefunden: {layers}")
+
+for name in layers:
+    gdf = gpd.read_file(GPKG_SOURCE, layer=name)
+    gdf.to_file(GPKG_NEW, layer=name, driver='GPKG')
+    print(f"  Kopiert: {name} ({len(gdf)} Features)")
+
+# Styles kopieren
+con_in  = sqlite3.connect(GPKG_SOURCE)
+con_out = sqlite3.connect(GPKG_NEW)
+ci, co  = con_in.cursor(), con_out.cursor()
+ci.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='layer_styles'")
+if ci.fetchone():
+    ci.execute("""SELECT f_table_catalog,f_table_schema,f_table_name,f_geometry_column,
+                  styleName,styleQML,styleSLD,useAsDefault,description,owner,ui,update_time
+                  FROM layer_styles""")
+    rows = ci.fetchall()
+    co.execute("""CREATE TABLE IF NOT EXISTS layer_styles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, f_table_catalog TEXT, f_table_schema TEXT,
+        f_table_name TEXT, f_geometry_column TEXT, styleName TEXT, styleQML TEXT,
+        styleSLD TEXT, useAsDefault INTEGER, description TEXT, owner TEXT,
+        ui TEXT, update_time TEXT)""")
+    co.executemany("""INSERT INTO layer_styles
+        (f_table_catalog,f_table_schema,f_table_name,f_geometry_column,styleName,
+        styleQML,styleSLD,useAsDefault,description,owner,ui,update_time)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", rows)
+    con_out.commit()
+    print(f"  {len(rows)} Styles kopiert")
+con_in.close()
+con_out.close()
+print()
+
+# ==============================================================================
+# SCHRITT 2: Bäume + Gebäude + Straßen laden
+# ==============================================================================
+
+print("=== Schritt 2: Daten laden ===")
+
+gdf_b = gpd.read_file(BAEUME_GPKG, layer='Baeume')
+if gdf_b.crs.to_epsg() != 25832:
+    gdf_b = gdf_b.to_crs(epsg=25832)
+print(f"Bäume: {len(gdf_b)}")
+
+gdf_geb = gpd.read_file(GEBAEUDE_PATH)
+if gdf_geb.crs.to_epsg() != 25832:
+    gdf_geb = gdf_geb.to_crs(epsg=25832)
+geb_felder = list(gdf_geb.columns)
+print(f"Gebäude: {len(gdf_geb)}")
+
+gdf_str = gpd.read_file(GPKG_NEW, layer='Strassen')
+if gdf_str.crs.to_epsg() != 25832:
+    gdf_str = gdf_str.to_crs(epsg=25832)
+print(f"Straßen: {len(gdf_str)}")
+
+# Kronenradius aus nDOM1
+print("\nKronenradius berechnen...")
+ds_ndom   = gdal.Open(NDOM1_VRT, gdal.GA_ReadOnly)
+band_ndom = ds_ndom.GetRasterBand(1)
+gt_ndom   = ds_ndom.GetGeoTransform()
+rx        = ds_ndom.RasterXSize
+ry        = ds_ndom.RasterYSize
+
+crown_radii = []
+for i, (idx, row) in enumerate(gdf_b.iterrows()):
+    if i % 4000 == 0:
+        print(f"  {i}/{len(gdf_b)}...")
+    try:
+        d = float(row['diameter_crown'])
+        if d > 0:
+            crown_radii.append(d / 2.0)
+            continue
+    except (TypeError, ValueError):
+        pass
+    h = get_baum_hoehe(row)
+    crown_radii.append(calc_crown_radius_ndom1(band_ndom, gt_ndom, row.geometry.x, row.geometry.y, h, rx, ry))
+
+ds_ndom = None
+gdf_b['crown_radius'] = crown_radii
+print(f"Kronenradius Ø: {sum(crown_radii)/len(crown_radii):.1f}m\n")
+
+# Sonnenposition
+sp = [(h, *sonnenposition(h)) for h in ZEITPUNKTE if sonnenposition(h)[1] >= ELEVATION_MIN]
+
+# ==============================================================================
+# SCHRITT 3: Schattenberechnung (4×4 Kacheln)
+# ==============================================================================
+
+print("=== Schritt 3: Schattenberechnung ===")
+
+xmin, ymin, xmax, ymax = gdf_str.total_bounds
+tile_w = (xmax - xmin) / TILES_X
+tile_h = (ymax - ymin) / TILES_Y
+print(f"Kachelgröße: {tile_w:.0f}m × {tile_h:.0f}m\n")
+
+shadow_results = {}
+
+for ty in range(TILES_Y):
+    for tx in range(TILES_X):
+        tile_num = ty * TILES_X + tx + 1
+        print(f"--- Kachel {tile_num}/16 (tx={tx}, ty={ty}) ---")
+
+        t_xmin = xmin + tx * tile_w
+        t_xmax = t_xmin + tile_w
+        t_ymin = ymin + ty * tile_h
+        t_ymax = t_ymin + tile_h
+        b_xmin = t_xmin - BUFFER; b_xmax = t_xmax + BUFFER
+        b_ymin = t_ymin - BUFFER; b_ymax = t_ymax + BUFFER
+
+        mask_str = (
+            (gdf_str.geometry.bounds['minx'] < t_xmax) &
+            (gdf_str.geometry.bounds['maxx'] > t_xmin) &
+            (gdf_str.geometry.bounds['miny'] < t_ymax) &
+            (gdf_str.geometry.bounds['maxy'] > t_ymin)
+        )
+        tile_str = gdf_str[mask_str]
+        if len(tile_str) == 0:
+            print(f"  Keine Straßen — übersprungen\n")
+            continue
+
+        mask_geb = (
+            (gdf_geb.geometry.bounds['minx'] < b_xmax) &
+            (gdf_geb.geometry.bounds['maxx'] > b_xmin) &
+            (gdf_geb.geometry.bounds['miny'] < b_ymax) &
+            (gdf_geb.geometry.bounds['maxy'] > b_ymin)
+        )
+        tile_geb = gdf_geb[mask_geb]
+
+        mask_b = (
+            (gdf_b.geometry.x >= b_xmin) & (gdf_b.geometry.x <= b_xmax) &
+            (gdf_b.geometry.y >= b_ymin) & (gdf_b.geometry.y <= b_ymax)
+        )
+        tile_b = gdf_b[mask_b]
+        print(f"  Straßen: {len(tile_str)} | Gebäude: {len(tile_geb)} | Bäume: {len(tile_b)}")
+
+        schatten_pro_t = {h: [] for h, *_ in sp}
+
+        for _, feat in tile_geb.iterrows():
+            fp = feat.geometry
+            if fp is None or fp.is_empty or not fp.is_valid:
+                continue
+            hoehe = get_geb_hoehe(feat, geb_felder)
+            for h, az, elev in sp:
+                s = gebaeude_schatten(fp, hoehe, az, elev)
+                if s and s.is_valid:
+                    schatten_pro_t[h].append(s)
+
+        for _, brow in tile_b.iterrows():
+            x, y    = brow.geometry.x, brow.geometry.y
+            hoehe   = get_baum_hoehe(brow)
+            krone_r = brow['crown_radius']
+            if hoehe is None or hoehe <= 0 or krone_r <= 0:
+                continue
+            for h, az, elev in sp:
+                s = baum_schatten_polygon(x, y, krone_r, hoehe, az, elev)
+                if s and s.is_valid:
+                    schatten_pro_t[h].append(s)
+
+        strtrees = {h: STRtree(schatten_pro_t[h]) for h, *_ in sp if schatten_pro_t[h]}
+
+        for orig_idx, srow in tile_str.iterrows():
+            geom = srow.geometry
+            if geom is None or geom.is_empty or geom.length < 0.1:
+                shadow_results[orig_idx] = None
+                continue
+            pct_werte = []
+            for h, az, elev in sp:
+                if h not in strtrees:
+                    pct_werte.append(0.0); continue
+                hits  = strtrees[h].query(geom)
+                kands = [schatten_pro_t[h][i] for i in hits]
+                if not kands:
+                    pct_werte.append(0.0); continue
+                try:
+                    su  = unary_union(kands)
+                    pct = min(geom.intersection(su).length / geom.length * 100, 100.0)
+                    pct_werte.append(pct)
+                except Exception:
+                    pct_werte.append(0.0)
+            shadow_results[orig_idx] = round(sum(pct_werte) / len(pct_werte), 1)
+
+        print(f"  Berechnet gesamt: {len(shadow_results)}\n")
+
+# ==============================================================================
+# SCHRITT 4: Waldkorrektur
+# ==============================================================================
+
+print("=== Schritt 4: Waldkorrektur ===")
+gdf_forest   = gpd.read_file(FOREST_PATH)
+if gdf_forest.crs.to_epsg() != 25832:
+    gdf_forest = gdf_forest.to_crs(epsg=25832)
+forest_union = gdf_forest.geometry.union_all()
+forest_idx   = {idx for idx, row in gdf_str.iterrows() if row.geometry.intersects(forest_union)}
+print(f"{len(forest_idx)} Segmente in Waldgebieten\n")
+
+# ==============================================================================
+# SCHRITT 5: Shadow-Felder aktualisieren
+# ==============================================================================
+
+print("=== Schritt 5: Shadow-Felder aktualisieren ===")
+
+gdf_str['shadow_pct'] = gdf_str.index.map(
+    lambda i: None if i in forest_idx else shadow_results.get(i, None)
+)
+gdf_str['sun_pct'] = gdf_str['shadow_pct'].apply(
+    lambda v: round(100 - v, 1) if v is not None else None
+)
+
+def classify_shadow(row):
+    if row.name in forest_idx: return 'forest'
+    v = row['shadow_pct']
+    if v is None:   return None
+    if v < 10:      return 'none'
+    if v < 30:      return 'low'
+    if v < 60:      return 'medium'
+    return 'high'
+
+gdf_str['shadow_class'] = gdf_str.apply(classify_shadow, axis=1)
+
+valid = gdf_str['shadow_pct'].notna()
+print(f"shadow_pct Ø: {gdf_str.loc[valid, 'shadow_pct'].mean():.1f}%")
+print(f"shadow_clas<LOCAL_PATH>/n{gdf_str['shadow_class'].value_counts(dropna=False)}\n")
+
+# ==============================================================================
+# SCHRITT 6: UTCI neu berechnen
+# ==============================================================================
+
+print("=== Schritt 6: UTCI berechnen ===")
+
+sp_arr = gdf_str.loc[valid, 'shadow_pct'].values
+n      = valid.sum()
+utci_stack = []
+
+for t, elev in zip(ZEITPUNKTE, ELEVATIONS):
+    f_shade = sp_arr / 100.0
+    tmrt    = f_shade * (TA + DELTA_SHADE) + (1.0 - f_shade) * (TA + delta_sun(elev))
+    res     = calc_utci(tdb=np.full(n, TA), tr=tmrt, v=V, rh=RH, limit_inputs=False)
+    u_arr   = np.asarray(res.utci)
+    utci_stack.append(u_arr)
+    print(f"  {t:02d}:00 — Tmrt Ø {tmrt.mean():.1f}°C | UTCI Ø {u_arr.mean():.1f}°C")
+
+utci_avg = np.mean(np.column_stack(utci_stack), axis=1)
+gdf_str['utci_avg']  = np.nan
+gdf_str.loc[valid, 'utci_avg'] = utci_avg
+gdf_str['utci_class'] = gdf_str['utci_avg'].apply(classify_utci)
+
+print(f"\nutci_avg Ø: {gdf_str.loc[valid, 'utci_avg'].mean():.1f}°C")
+print(f"Klassenverteilun<LOCAL_PATH>/n{gdf_str['utci_class'].value_counts(dropna=False)}\n")
+
+# ==============================================================================
+# SCHRITT 7: Alle Layer in neue GPKG schreiben
+# ==============================================================================
+
+print("=== Schritt 7: In 22072026.gpkg schreiben ===")
+
+gdf_str.to_file(GPKG_NEW, layer='Strassen', driver='GPKG')
+print("Layer 'Strassen' gespeichert")
+
+schatten_cols = [c for c in ['osm_id','name','fclass','shadow_pct','sun_pct','shadow_class','geometry'] if c in gdf_str.columns]
+gdf_str[schatten_cols].to_file(GPKG_NEW, layer='Strassen_Schatten', driver='GPKG')
+print("Layer 'Strassen_Schatten' gespeichert")
+
+utci_cols = [c for c in ['osm_id','name','fclass','utci_avg','utci_class','geometry'] if c in gdf_str.columns]
+gdf_str[utci_cols].to_file(GPKG_NEW, layer='Strassen_UTCI', driver='GPKG')
+print("Layer 'Strassen_UTCI' gespeichert")
+
+print(f"\nFertig. Neue Hauptdatei: {GPKG_NEW}")

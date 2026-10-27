@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "Please cite the repository snapshot and record the access date. A Zenodo DOI has not been assigned."
+type: dataset
+title: "Pedestrian Atlas Stuttgart"
+authors:
+  - family-names: "Bakhshi"
+    given-names: "Mohammadreza"
+repository-code: "https://github.com/Reza-Bakhshi7/fussgaengeratlas-stuttgart"
+url: "https://github.com/Reza-Bakhshi7/fussgaengeratlas-stuttgart"
+abstract: "GIS atlas of pedestrian infrastructure and environmental conditions in Stuttgart. Data-processing status: 15 September 2026; public repository packaging: 27 October 2026. Source-specific reuse conditions apply."
+keywords:
+  - Stuttgart
+  - GIS
+  - pedestrians
+  - accessibility

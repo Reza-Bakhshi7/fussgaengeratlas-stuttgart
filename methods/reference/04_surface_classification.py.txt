@@ -1,0 +1,132 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_34_bodenbelag.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+# Script 34 — Bodenbelag-Klassifikation
+# Fußgängeratlas Stuttgart
+# Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+# Datum: 23.07.2026
+# Ausführung: OSGeo4W Shell
+#
+# Was dieses Script tut:
+#   1. Neue GPKG 23072026 aus 22072026 aufbauen
+#   2. surface_class in Strassen-Layer berechnen
+#   3. Alle anderen Layer unverändert kopieren
+#   4. Neuen Layer Strassen_Bodenbelag anlegen
+#   5. Statistik ausgeben
+
+import geopandas as gpd
+import sqlite3
+from pathlib import Path
+
+# ── Pfade ──────────────────────────────────────────────────────────────────────
+ROOT = r"<LOCAL_PATH>/Projekt"
+FINAL = rf"{ROOT}\Daten\Final"
+SRC = rf"{FINAL}\Fussgaengeratlas_22072026.gpkg"
+DST = rf"{FINAL}\Fussgaengeratlas_23072026.gpkg"
+
+# ── Mapping OSM surface → surface_class ────────────────────────────────────────
+MAPPING = {
+    # gut
+    "asphalt":          "gut",
+    "asphalt;sett":     "gut",
+    "concrete":         "gut",
+    "concrete:plates":  "gut",
+    "concrete:lanes":   "gut",
+    "paved":            "gut",
+    "chipseal":         "gut",
+    "metal":            "gut",
+    "wood":             "gut",
+    # mittel
+    "paving_stones":          "mittel",
+    "paving_stones:double_t": "mittel",
+    "sett":                   "mittel",
+    "sett;paving_stones":     "mittel",
+    "fine_gravel":            "mittel",
+    "compacted":              "mittel",
+    "tartan":                 "mittel",
+    "rubber":                 "mittel",
+    "artificial_turf":        "mittel",
+    "metal_grid":             "mittel",
+    "stone":                  "mittel",
+    "tiles":                  "mittel",
+    "fliesen":                "mittel",   # Großschreibung wird per .str.lower() normalisiert
+    # schlecht
+    "cobblestone":          "schlecht",
+    "unhewn_cobblestone":   "schlecht",
+    "gravel":               "schlecht",
+    "pebblestone":          "schlecht",
+    "dirt":                 "schlecht",
+    "earth":                "schlecht",
+    "ground":               "schlecht",
+    "unpaved":              "schlecht",
+    "grass":                "schlecht",
+    "grass_paver":          "schlecht",
+    "mud":                  "schlecht",
+    "sand":                 "schlecht",
+    "woodchips":            "schlecht",
+    "rock":                 "schlecht",
+    "rubble":               "schlecht",
+    "stepping_stones":      "schlecht",
+}
+
+
+# ── Layer-Liste aus Quelle lesen ───────────────────────────────────────────────
+con = sqlite3.connect(SRC)
+layers = [r[0] for r in con.execute(
+    "SELECT table_name FROM gpkg_contents ORDER BY rowid"
+).fetchall()]
+con.close()
+print(f"Gefundene Layer: {layers}")
+
+# ── Strassen-Layer lesen und surface_class berechnen ──────────────────────────
+strassen = gpd.read_file(SRC, layer="Strassen")
+strassen["surface_class"] = (
+    strassen["surface"]
+    .str.lower()
+    .map(MAPPING)
+    .fillna("unbekannt")
+)
+
+# ── Ziel-GPKG aufbauen ────────────────────────────────────────────────────────
+if Path(DST).exists():
+    Path(DST).unlink()
+
+first = True
+for layer in layers:
+    gdf = strassen if layer == "Strassen" else gpd.read_file(SRC, layer=layer)
+    mode = "w" if first else "a"
+    gdf.to_file(DST, layer=layer, driver="GPKG", mode=mode)
+    first = False
+    print(f"Geschrieben: {layer} ({len(gdf):,} Features)")
+
+# ── Strassen_Bodenbelag anlegen ────────────────────────────────────────────────
+strassen.to_file(DST, layer="Strassen_Bodenbelag", driver="GPKG", mode="a")
+print(f"Geschrieben: Strassen_Bodenbelag ({len(strassen):,} Features)")
+
+# ── Statistik ─────────────────────────────────────────────────────────────────
+print("\n" + "=" * 50)
+print("STATISTIK surface_class")
+print("=" * 50)
+total = len(strassen)
+print(f"Segmente gesamt: {total:,}")
+
+for cls in ["gut", "mittel", "schlecht", "unbekannt"]:
+    n = (strassen["surface_class"] == cls).sum()
+    print(f"  {cls:<12}: {n:>6,}  ({n / total * 100:.1f}%)")
+
+null_count = strassen["surface"].isna().sum()
+print(f"\n  NULL surface: {null_count:,} Segmente")
+
+unk_with_value = strassen.loc[
+    (strassen["surface_class"] == "unbekannt") & strassen["surface"].notna(),
+    "surface"
+].value_counts().head(20)
+
+if not unk_with_value.empty:
+    print("\nHäufigste OSM-Werte ohne Mapping (Top 20):")
+    for val, n in unk_with_value.items():
+        print(f"  {val:<30}: {n}")
+
+print("\nFertig.")

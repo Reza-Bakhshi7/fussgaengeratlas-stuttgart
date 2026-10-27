@@ -1,0 +1,8 @@
+*.gpkg
+*.gpkg-*
+*.qgz~
+*.qgs~
+__pycache__/
+.DS_Store
+Thumbs.db
+dist/

@@ -1,0 +1,346 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_28_wind_expositionsindex.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+"""
+================================================================================
+Script 28 — Wind-Expositions-Index
+Fußgängeratlas Stuttgart | Reza Bakhshi | NVBW / MobiDataBW
+Stand: 16.07.2026
+================================================================================
+
+Ausführung: OSGeo4W Shell (nicht QGIS Console)
+Voraussetzung: QGIS geschlossen (WAL-Lock vermeiden)
+
+Methodik:
+  Dimensionsloser Wind-Expositions-Index (0–1) pro Straßensegment.
+  Kombination aus vier Komponenten:
+
+  1. wind_speed_base   Raster Band 1 (08111_windfeldaggregiertauf1000m)
+                       Relativer Windpotenzialwert, Einheit unbekannt —
+                       keine Quelldokumentation vorhanden. Räumliche
+                       Relativunterschiede sind nicht unabhängig validiert.
+
+  2. wind_alignment    |sin(Winkel zwischen Windrichtung und Segment)|
+                       1 = Wind trifft Segment senkrecht (maximale Exposition)
+                       0 = Wind parallel zum Segment
+                       Windrichtung aus Raster Band 2 (meteorologisch = woher)
+
+  3. tpi               Topographic Position Index (Näherung)
+                       Segment-Mittelhöhe minus mittlere Höhe aller Stuttgarter
+                       Segmente. Positiv = Kammlage (exponiert),
+                       Negativ = Kessel (abgeschirmt).
+                       Berechnet aus vorhandenen elev_start / elev_end Feldern.
+
+  4. building_density  Gebäude-Footprint-Anteil im 100m-Puffer um Mittelpunkt.
+                       Proxy für Windabschirmung durch Bebauung.
+
+  Gewichtete Summe (jede Komponente normalisiert 0–1):
+    wind_exposure_index = 0.35 * wind_speed_norm
+                        + 0.25 * wind_alignment
+                        + 0.25 * tpi_norm
+                        + 0.15 * (1 - building_density)
+
+  Ergebnis normalisiert auf 0–1 über alle Segmente.
+
+Saisonale Interpretation (entgegengesetztes Vorzeichen):
+  wind_comfort_summer: exposed=gut   (Kühlung bei Hitze)
+  wind_comfort_winter: exposed=schlecht (Windchill bei Kälte)
+
+Neue Felder im Strassen-Layer:
+  wind_speed_base     Float   Raster Band 1 Rohwert
+  wind_dir_base       Float   Raster Band 2, Grad (meteorologisch)
+  segment_azimut      Float   Geometrie-Richtung, Grad (0=Nord, im Uhrzeigersinn)
+  wind_alignment      Float   |sin(wind_dir_base - segment_azimut)|, 0–1
+  tpi                 Float   Höhenabweichung vom Stuttgarter Mittel, Meter
+  building_density    Float   Gebäudedeckungsgrad 100m-Puffer, 0–1
+  wind_exposure_index Float   Normalisierter Gesamt-Index, 0–1
+  wind_exposure_class String  sheltered / moderate / exposed
+  wind_comfort_summer String  gut / mittel / schlecht
+  wind_comfort_winter String  schlecht / mittel / gut
+
+Limitationen (für Dokumentation):
+  - Band 1 Einheit unbekannt: nur räumliche Relativwerte verwendbar
+  - 1000m Rasterauflösung: ~173 Segmente teilen einen Rasterwert
+  - TPI ist Näherung (Abweichung vom Gesamtmittel, kein Focal-Mean-TPI)
+  - building_density ist Proxy, keine direkte Windmessung
+  - wind_exposure_index ist saisonagnostisch (neutral 0–1)
+================================================================================
+"""
+
+import os
+import math
+import sqlite3
+import numpy as np
+import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Point
+from shapely.strtree import STRtree
+from osgeo import gdal
+
+# ==============================================================================
+# Pfade
+# ==============================================================================
+
+GPKG_MAIN    = r"<LOCAL_PATH>/Fussgaengeratlas_03072026.gpkg"
+WIND_RASTER  = r"<LOCAL_PATH>/08111_windfeldaggregiertauf1000m.tif"
+GEBAEUDE_PATH = r"<LOCAL_PATH>/gebaeude_hoehe2.gpkg"
+LAYER         = 'Strassen'
+
+NODATA_THRESH  = -9000   # Werte unter diesem Schwellenwert = NoData
+BUFFER_RADIUS  = 100     # Meter, Puffer für Bebauungsdichte
+
+# Gewichte (Summe = 1.0)
+W_WIND  = 0.35
+W_ALIGN = 0.25
+W_TPI   = 0.25
+W_SHELT = 0.15
+
+
+# ==============================================================================
+# Hilfsfunktionen
+# ==============================================================================
+
+def norm_01(arr):
+    """Normalisiert Array auf [0, 1]. Bei konstantem Array → alles 0."""
+    mn = np.nanmin(arr)
+    mx = np.nanmax(arr)
+    if mx == mn:
+        return np.zeros_like(arr, dtype=float)
+    return (arr - mn) / (mx - mn)
+
+
+def get_midpoint(geom):
+    """Mittelpunkt der Geometrie als (x, y)."""
+    pt = geom.interpolate(0.5, normalized=True)
+    return (pt.x, pt.y)
+
+
+def calc_segment_azimut(geom):
+    """
+    Richtung des Segments in Grad (0=Nord, 90=Ost, im Uhrzeigersinn).
+    Nimmt ersten und letzten Koordinatenpunkt.
+    """
+    if geom.geom_type == 'MultiLineString':
+        coords_start = list(geom.geoms[0].coords)[0]
+        coords_end   = list(geom.geoms[-1].coords)[-1]
+    else:
+        coords       = list(geom.coords)
+        coords_start = coords[0]
+        coords_end   = coords[-1]
+    dx = coords_end[0] - coords_start[0]
+    dy = coords_end[1] - coords_start[1]
+    if dx == 0 and dy == 0:
+        return np.nan
+    return math.degrees(math.atan2(dx, dy)) % 360
+
+
+def calc_wind_alignment(wind_dir, seg_az):
+    """
+    |sin(Winkel zwischen Windrichtung und Segment-Azimut)|
+    1 = Wind senkrecht zum Segment (max. Exposition im Straßenraum)
+    0 = Wind parallel zum Segment
+    """
+    if np.isnan(wind_dir) or np.isnan(seg_az):
+        return np.nan
+    diff_rad = math.radians(wind_dir - seg_az)
+    return abs(math.sin(diff_rad))
+
+
+def classify_exposure(v):
+    if np.isnan(v):  return None
+    if v < 0.33:     return 'sheltered'
+    if v < 0.67:     return 'moderate'
+    return 'exposed'
+
+
+# ==============================================================================
+# Hauptfunktion
+# ==============================================================================
+
+def script_28_wind_expositionsindex():
+    print("=== Script 28: Wind-Expositions-Index ===\n")
+
+    # --- 1. Strassen-Layer laden ---
+    print("Schritt 1: Strassen-Layer laden...")
+    gdf = gpd.read_file(GPKG_MAIN, layer=LAYER)
+    n = len(gdf)
+    print(f"  {n} Segmente geladen")
+
+    # --- 2. Segment-Mittelpunkte berechnen ---
+    print("\nSchritt 2: Mittelpunkte berechnen...")
+    midpoints_xy = [get_midpoint(g) for g in gdf.geometry]
+
+    # --- 3. Windraster einlesen und samplen ---
+    print("\nSchritt 3: Windraster samplen...")
+    ds = gdal.Open(WIND_RASTER)
+    if ds is None:
+        raise FileNotFoundError(f"Windraster nicht gefunden: {WIND_RASTER}")
+
+    gt = ds.GetGeoTransform()
+    # gt[0] = x-Ursprung (links), gt[3] = y-Ursprung (oben)
+    # gt[1] = Pixelbreite, gt[5] = Pixelhöhe (negativ)
+    b1_data = ds.GetRasterBand(1).ReadAsArray().astype(float)  # 20×21
+    b2_data = ds.GetRasterBand(2).ReadAsArray().astype(float)
+    raster_rows, raster_cols = b1_data.shape
+    ds = None  # schließen
+
+    print(f"  Raster: {raster_cols} Spalten × {raster_rows} Zeilen")
+    print(f"  Band 1 Rohbereich: {np.min(b1_data):.4f} – {np.max(b1_data):.4f}")
+    print(f"  Band 2 Rohbereich: {np.min(b2_data):.1f}° – {np.max(b2_data):.1f}°")
+
+    # Sampling: Koordinate → Rasterindex → Wert
+    wind_speed_raw = np.full(n, np.nan)
+    wind_dir_raw   = np.full(n, np.nan)
+
+    for i, (x, y) in enumerate(midpoints_xy):
+        col = int((x - gt[0]) / gt[1])
+        row = int((y - gt[3]) / gt[5])
+        if 0 <= row < raster_rows and 0 <= col < raster_cols:
+            v1 = b1_data[row, col]
+            v2 = b2_data[row, col]
+            wind_speed_raw[i] = np.nan if v1 < NODATA_THRESH or v1 < 0 else v1
+            wind_dir_raw[i]   = np.nan if v2 < NODATA_THRESH or v2 < 0 else v2
+
+    n_nan = np.isnan(wind_speed_raw).sum()
+    print(f"  Segmente mit gültigem Windwert: {n - n_nan} / {n}")
+    if n_nan > 0:
+        print(f"  WARNUNG: {n_nan} Segmente außerhalb Raster-Extent → wind_exposure_index = NULL")
+
+    # --- 4. Segment-Azimut ---
+    print("\nSchritt 4: Segment-Azimut berechnen...")
+    azimut_arr = np.array([calc_segment_azimut(g) for g in gdf.geometry], dtype=float)
+    n_az_nan = np.isnan(azimut_arr).sum()
+    if n_az_nan > 0:
+        print(f"  WARNUNG: {n_az_nan} Segmente ohne Azimut (Punkt-Geometrie?)")
+
+    # --- 5. Wind-Alignment ---
+    print("\nSchritt 5: Wind-Alignment berechnen...")
+    alignment_arr = np.array(
+        [calc_wind_alignment(w, a) for w, a in zip(wind_dir_raw, azimut_arr)],
+        dtype=float
+    )
+    print(f"  Alignment-Bereich: {np.nanmin(alignment_arr):.4f} – {np.nanmax(alignment_arr):.4f}, "
+          f"Ø {np.nanmean(alignment_arr):.4f}")
+
+    # --- 6. TPI (Topographic Position Index, Näherung) ---
+    print("\nSchritt 6: TPI berechnen...")
+    seg_elev  = ((gdf['elev_start'] + gdf['elev_end']) / 2).values.astype(float)
+    mean_elev = np.nanmean(seg_elev)
+    tpi_arr   = seg_elev - mean_elev
+    print(f"  Mittlere Höhe Stuttgart (alle Segmente): {mean_elev:.1f} m ü. NN")
+    print(f"  TPI-Bereich: {tpi_arr.min():.1f} m – {tpi_arr.max():.1f} m")
+    print(f"  TPI > 0 (Kammlage): {(tpi_arr > 0).sum()} Segmente")
+    print(f"  TPI < 0 (Kessel):   {(tpi_arr < 0).sum()} Segmente")
+
+    # --- 7. Bebauungsdichte (100m-Puffer) ---
+    print("\nSchritt 7: Bebauungsdichte berechnen (100m-Puffer)...")
+    geb = gpd.read_file(GEBAEUDE_PATH)
+    if geb.crs != gdf.crs:
+        geb = geb.to_crs(gdf.crs)
+    geb_geoms = geb.geometry.values
+    geb_tree  = STRtree(geb_geoms)
+
+    buffer_area_m2 = math.pi * BUFFER_RADIUS ** 2
+    building_density_arr = np.zeros(n, dtype=float)
+
+    for i, (_, row) in enumerate(gdf.iterrows()):
+        if i % 10000 == 0:
+            print(f"  {i}/{n}...")
+        mp  = Point(midpoints_xy[i])
+        buf = mp.buffer(BUFFER_RADIUS)
+        hits = geb_tree.query(buf)
+        if len(hits) == 0:
+            continue
+        try:
+            covered = sum(
+                geb_geoms[j].intersection(buf).area
+                for j in hits
+                if geb_geoms[j].intersects(buf)
+            )
+            building_density_arr[i] = min(covered / buffer_area_m2, 1.0)
+        except Exception:
+            building_density_arr[i] = 0.0
+
+    print(f"  Bebauungsdichte: {building_density_arr.min():.4f} – {building_density_arr.max():.4f}, "
+          f"Ø {building_density_arr.mean():.4f}")
+
+    # --- 8. Normalisierung und gewichtete Kombination ---
+    print("\nSchritt 8: Normalisierung und Index-Berechnung...")
+
+    ws_norm  = norm_01(wind_speed_raw)      # Band 1 normalisiert
+    al_norm  = alignment_arr                # bereits 0–1
+    tpi_norm = norm_01(tpi_arr)             # 0=Kessel, 1=Kammlage
+    sh_norm  = 1.0 - building_density_arr  # 0=dicht bebaut, 1=offen
+
+    # NaN-sichere gewichtete Summe
+    # Segmente ohne Windwert (außerhalb Raster) → Index NaN
+    exposure_raw = (
+        W_WIND  * np.where(np.isnan(ws_norm),  0.0, ws_norm)  +
+        W_ALIGN * np.where(np.isnan(al_norm),  0.0, al_norm)  +
+        W_TPI   * tpi_norm                                     +
+        W_SHELT * sh_norm
+    )
+    exposure_raw[np.isnan(wind_speed_raw)] = np.nan
+
+    # Nochmalige 0–1-Normalisierung über alle gültigen Werte
+    wind_exposure_index = norm_01(exposure_raw)
+    wind_exposure_index[np.isnan(exposure_raw)] = np.nan
+
+    print(f"  Index-Bereich: {np.nanmin(wind_exposure_index):.4f} – {np.nanmax(wind_exposure_index):.4f}, "
+          f"Ø {np.nanmean(wind_exposure_index):.4f}")
+
+    # --- 9. Klassifikation ---
+    print("\nSchritt 9: Klassifikation...")
+    exposure_class  = [classify_exposure(v) for v in wind_exposure_index]
+    summer_comfort  = [
+        {'exposed': 'gut', 'moderate': 'mittel', 'sheltered': 'schlecht'}.get(c)
+        for c in exposure_class
+    ]
+    winter_comfort  = [
+        {'exposed': 'schlecht', 'moderate': 'mittel', 'sheltered': 'gut'}.get(c)
+        for c in exposure_class
+    ]
+
+    counts = pd.Series(exposure_class).value_counts(dropna=False)
+    print(f"  wind_exposure_clas<LOCAL_PATH>/n{counts.to_string()}")
+
+    # --- 10. Felder in GeoDataFrame setzen ---
+    print("\nSchritt 10: Felder setzen...")
+    gdf['wind_speed_base']     = np.round(wind_speed_raw, 6)
+    gdf['wind_dir_base']       = np.round(wind_dir_raw, 1)
+    gdf['segment_azimut']      = np.round(azimut_arr, 1)
+    gdf['wind_alignment']      = np.round(alignment_arr, 4)
+    gdf['tpi']                 = np.round(tpi_arr, 1)
+    gdf['building_density']    = np.round(building_density_arr, 4)
+    gdf['wind_exposure_index'] = np.round(wind_exposure_index, 4)
+    gdf['wind_exposure_class'] = exposure_class
+    gdf['wind_comfort_summer'] = summer_comfort
+    gdf['wind_comfort_winter'] = winter_comfort
+
+    # --- 11. Speichern ---
+    print("\nSchritt 11: Speichern...")
+    gdf.to_file(GPKG_MAIN, layer=LAYER, driver='GPKG')
+    print(f"  Fertig. Layer '{LAYER}' in {GPKG_MAIN}")
+
+    # --- Abschluss-Statistik ---
+    print("\n=== Zusammenfassung ===")
+    print(f"Segmente gesamt:          {n}")
+    print(f"Mit gültigem wind_index:  {(~pd.isna(wind_exposure_index)).sum()}")
+    print(f"NULL (außerhalb Raster):  {pd.isna(wind_exposure_index).sum()}")
+    print(f"sheltered:  {exposure_class.count('sheltered')}")
+    print(f"moderate:   {exposure_class.count('moderate')}")
+    print(f"exposed:    {exposure_class.count('exposed')}")
+    print(f"Ø wind_exposure_index: {np.nanmean(wind_exposure_index):.4f}")
+    print(f"Ø building_density:    {building_density_arr.mean():.4f}")
+    print(f"Ø TPI:                 {tpi_arr.mean():.1f} m")
+    print("=== Script 28 abgeschlossen ===\n")
+
+
+# ==============================================================================
+# Ausführung
+# ==============================================================================
+
+if __name__ == '__main__':
+    script_28_wind_expositionsindex()

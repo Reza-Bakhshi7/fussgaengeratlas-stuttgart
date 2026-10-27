@@ -1,0 +1,485 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_39_treppen_ketten_merge.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+"""
+Script 39 – Treppen-Ketten zusammenführen
+Fußgängeratlas Stuttgart | Stand: 12.08.2026
+
+Ausführung: OSGeo4W Shell, QGIS vorher schließen.
+
+Zweck
+-----
+Führt unmittelbar aufeinanderfolgende Treppensegmente an Knoten mit Grad 2
+zusammen. Für die fachliche Treppenerkennung gilt immer
+COALESCE(fclass_display, fclass). Dadurch werden auch die 202 bereits
+dokumentierten Treppen-Overrides berücksichtigt.
+
+Sicherheitsregeln
+----------------
+* Die Quelldatei wird niemals verändert.
+* Eine bereits vorhandene Zieldatei wird niemals überschrieben.
+* Alle Nicht-Straßen-Layer und alle GeoPackage-Systemtabellen bleiben erhalten.
+* Die sieben Straßen-Themenlayer werden aus dem aktualisierten Hauptlayer mit
+  exakt ihren bisherigen Spalten neu aufgebaut.
+
+Beispiel
+--------
+python script_39_treppen_ketten_merge.py ^
+  --src "<LOCAL_PATH>/Fussgaengeratlas_30072026b.gpkg" ^
+  --dst "<LOCAL_PATH>/Fussgaengeratlas_12082026a.gpkg"
+"""
+
+from __future__ import annotations
+
+import argparse
+import math
+import os
+import shutil
+import sqlite3
+from collections import defaultdict
+from pathlib import Path
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+from shapely.geometry import LineString, MultiLineString
+from shapely.ops import linemerge
+
+
+PRECISION = 3  # Millimeter in EPSG:25832; identisch zur bisherigen Kettenlogik
+MAIN_LAYER = "Strassen"
+THEME_LAYERS = [
+    "Strassen_Schatten",
+    "Strassen_UTCI",
+    "Strassen_Wind",
+    "Strassen_Bodenbelag",
+    "Strassen_Laerm",
+    "Strassen_Schatten_Winter",
+    "Strassen_UTCI_Winter",
+]
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--src", required=True, help="Quell-GPKG (wird nur gelesen)")
+    parser.add_argument("--dst", required=True, help="Neue Ziel-GPKG")
+    return parser.parse_args()
+
+
+def snap_xy(xy) -> tuple[float, float]:
+    return round(float(xy[0]), PRECISION), round(float(xy[1]), PRECISION)
+
+
+def endpoints(geom: LineString) -> tuple[tuple[float, float], tuple[float, float]]:
+    coords = list(geom.coords)
+    return snap_xy(coords[0]), snap_xy(coords[-1])
+
+
+def list_feature_layers(gpkg: Path) -> list[str]:
+    with sqlite3.connect(gpkg) as con:
+        return [
+            row[0]
+            for row in con.execute(
+                "SELECT table_name FROM gpkg_contents "
+                "WHERE data_type='features' ORDER BY rowid"
+            )
+        ]
+
+
+def sqlite_integrity(gpkg: Path) -> str:
+    with sqlite3.connect(gpkg) as con:
+        return str(con.execute("PRAGMA integrity_check").fetchone()[0])
+
+
+def build_node_map(gdf: gpd.GeoDataFrame) -> dict[tuple[float, float], list[int]]:
+    node_map: dict[tuple[float, float], list[int]] = defaultdict(list)
+    for idx, geom in gdf.geometry.items():
+        if geom is None or geom.is_empty or not isinstance(geom, LineString):
+            continue
+        start, end = endpoints(geom)
+        node_map[start].append(idx)
+        node_map[end].append(idx)
+    return node_map
+
+
+def effective_fclass(row: pd.Series):
+    value = row.get("fclass_display")
+    return value if pd.notna(value) and str(value).strip() else row.get("fclass")
+
+
+def connected_step_components(
+    gdf: gpd.GeoDataFrame,
+) -> tuple[list[list[int]], int]:
+    node_map = build_node_map(gdf)
+    steps = {idx for idx, row in gdf.iterrows() if effective_fclass(row) == "steps"}
+
+    adjacency: dict[int, set[int]] = defaultdict(set)
+    merge_nodes = 0
+    for indices in node_map.values():
+        # Verzweigungen und Kreuzungen bleiben unangetastet.
+        if len(indices) == 2 and indices[0] in steps and indices[1] in steps:
+            left, right = indices
+            if left != right:
+                adjacency[left].add(right)
+                adjacency[right].add(left)
+                merge_nodes += 1
+
+    components: list[list[int]] = []
+    visited: set[int] = set()
+    for start in sorted(adjacency):
+        if start in visited:
+            continue
+        component: list[int] = []
+        queue = [start]
+        while queue:
+            current = queue.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.append(current)
+            queue.extend(sorted(adjacency[current] - visited, reverse=True))
+        if len(component) >= 2:
+            components.append(sorted(component))
+    return components, merge_nodes
+
+
+def endpoint_elevation(
+    component: gpd.GeoDataFrame, point: tuple[float, float]
+) -> float | None:
+    values: list[float] = []
+    for _, row in component.iterrows():
+        start, end = endpoints(row.geometry)
+        if start == point and pd.notna(row.get("elev_start")):
+            values.append(float(row["elev_start"]))
+        if end == point and pd.notna(row.get("elev_end")):
+            values.append(float(row["elev_end"]))
+    if not values:
+        return None
+    # An einem gemeinsamen Netzknoten sollten die Höhen gleich sein. Der
+    # Mittelwert macht die Funktion robust gegen kleine Rundungsabweichungen.
+    return float(np.mean(values))
+
+
+def weights_for(component: gpd.GeoDataFrame) -> pd.Series:
+    weights = pd.to_numeric(component.get("length_m"), errors="coerce")
+    geom_lengths = component.geometry.length
+    weights = weights.where(weights > 0, geom_lengths)
+    return weights.fillna(geom_lengths).astype(float)
+
+
+def weighted_mean(component: gpd.GeoDataFrame, field: str) -> float | None:
+    if field not in component.columns:
+        return None
+    values = pd.to_numeric(component[field], errors="coerce")
+    weights = weights_for(component)
+    valid = values.notna() & weights.notna() & (weights > 0)
+    if not valid.any():
+        return None
+    return float(np.average(values[valid], weights=weights[valid]))
+
+
+def slope_class(value: float) -> str:
+    if value <= 3:
+        return "flat"
+    if value <= 6:
+        return "moderate"
+    if value <= 10:
+        return "steep"
+    return "very_steep"
+
+
+def shadow_class(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "forest"
+    if value < 10:
+        return "none"
+    if value < 30:
+        return "low"
+    if value < 60:
+        return "medium"
+    return "high"
+
+
+def utci_summer_class(value: float | None):
+    if value is None or pd.isna(value):
+        return None
+    if value < 26:
+        return "no_stress"
+    if value < 32:
+        return "moderate"
+    if value < 38:
+        return "strong"
+    if value < 46:
+        return "very_strong"
+    return "extreme"
+
+
+def utci_winter_class(value: float | None):
+    if value is None or pd.isna(value):
+        return None
+    if value > 9:
+        return "no_stress"
+    if value >= 0:
+        return "slight"
+    if value >= -13:
+        return "moderate"
+    if value >= -27:
+        return "strong"
+    return "very_strong"
+
+
+def noise_class(value: float | None) -> str:
+    if value is None or pd.isna(value) or value < 55:
+        return "ruhig"
+    if value < 60:
+        return "maessig"
+    if value < 65:
+        return "erhoeht"
+    if value < 70:
+        return "hoch"
+    if value < 75:
+        return "sehr_hoch"
+    return "extrem"
+
+
+def azimuth(geom: LineString) -> float | None:
+    coords = list(geom.coords)
+    dx = coords[-1][0] - coords[0][0]
+    dy = coords[-1][1] - coords[0][1]
+    if dx == 0 and dy == 0:
+        return None
+    return math.degrees(math.atan2(dx, dy)) % 360
+
+
+def arrow_angle(geom: LineString, directed_slope: float) -> float | None:
+    value = azimuth(geom)
+    if value is None:
+        return None
+    return value if directed_slope >= 0 else (value + 180) % 360
+
+
+def wind_alignment(wind_direction, segment_azimuth) -> float | None:
+    if pd.isna(wind_direction) or segment_azimuth is None:
+        return None
+    return abs(math.sin(math.radians(float(wind_direction) - segment_azimuth)))
+
+
+def create_merged_row(
+    gdf: gpd.GeoDataFrame, indices: list[int]
+) -> tuple[pd.Series | None, str | None]:
+    component = gdf.loc[indices].copy()
+    merged = linemerge(list(component.geometry))
+    if isinstance(merged, MultiLineString) or not isinstance(merged, LineString):
+        return None, "Geometrie nicht zu einer LineString zusammenführbar"
+    if merged.is_empty or not merged.is_valid or merged.is_ring:
+        return None, "leere, ungültige oder geschlossene Geometrie"
+
+    start, end = endpoints(merged)
+    elev_start = endpoint_elevation(component, start)
+    elev_end = endpoint_elevation(component, end)
+    if elev_start is None or elev_end is None:
+        return None, "Endpunkthöhen fehlen"
+
+    weights = weights_for(component)
+    base_idx = weights.idxmax()
+    row = component.loc[base_idx].copy()
+    total_length = float(merged.length)
+    elevation_difference = elev_end - elev_start
+    directed_slope = elevation_difference / total_length * 100 if total_length else 0.0
+    absolute_slope = abs(directed_slope)
+
+    row["geometry"] = merged
+    row["length_m"] = round(total_length, 2)
+    row["elev_start"] = round(elev_start, 2)
+    row["elev_end"] = round(elev_end, 2)
+    row["elev_diff"] = round(elevation_difference, 2)
+    row["slope_pct"] = round(absolute_slope, 2)
+    row["slope_dir"] = round(directed_slope, 2)
+    row["slope_class"] = slope_class(absolute_slope)
+    row["arrow_angle"] = round(arrow_angle(merged, directed_slope), 1)
+
+    # Der native OSM-Wert des längsten Teilsegments bleibt unverändert.
+    # Nur das dafür vorgesehene Anzeigefeld bildet die fachliche Klasse ab.
+    if row.get("fclass") != "steps":
+        row["fclass_display"] = "steps"
+        row["correction_note"] = "fclass_override_steps_26062026"
+
+    for value_field, class_field in [
+        ("shadow_pct", "shadow_class"),
+        ("shadow_pct_winter", "shadow_class_winter"),
+    ]:
+        if value_field in component.columns:
+            value = weighted_mean(component, value_field)
+            row[value_field] = round(value, 1) if value is not None else np.nan
+            sun_field = "sun_pct" if value_field == "shadow_pct" else "sun_pct_winter"
+            if sun_field in component.columns:
+                row[sun_field] = round(100 - value, 1) if value is not None else np.nan
+            row[class_field] = shadow_class(value)
+
+    if "utci_avg" in component.columns:
+        value = weighted_mean(component, "utci_avg")
+        row["utci_avg"] = round(value, 1) if value is not None else np.nan
+        row["utci_class"] = utci_summer_class(value)
+    if "utci_avg_winter" in component.columns:
+        value = weighted_mean(component, "utci_avg_winter")
+        row["utci_avg_winter"] = round(value, 1) if value is not None else np.nan
+        row["utci_class_winter"] = utci_winter_class(value)
+
+    # Bestehende Planung: Lärmwerte längengewichtet mitteln und neu klassifizieren.
+    for field in ["noise_road_db", "noise_rail_db", "noise_ind_db", "noise_db"]:
+        if field in component.columns:
+            value = weighted_mean(component, field)
+            row[field] = round(value, 1) if value is not None else np.nan
+    if "noise_class" in component.columns:
+        row["noise_class"] = noise_class(row.get("noise_db"))
+
+    # Wind-Basis, Bebauungsdichte, TPI, Index und Komfortklassen stammen wie
+    # geplant vom längsten Teilsegment. Nur die tatsächlich geometrieabhängigen
+    # Richtungsfelder werden für die neue Linie aktualisiert.
+    if "segment_azimut" in component.columns:
+        segment_azimuth = azimuth(merged)
+        row["segment_azimut"] = (
+            round(segment_azimuth, 1) if segment_azimuth is not None else np.nan
+        )
+        if "wind_alignment" in component.columns:
+            alignment = wind_alignment(row.get("wind_dir_base"), segment_azimuth)
+            row["wind_alignment"] = round(alignment, 4) if alignment is not None else np.nan
+
+    return row, None
+
+
+def validate_source(src: Path) -> tuple[list[str], dict[str, list[str]]]:
+    if not src.is_file():
+        raise SystemExit(f"FEHLER: Quelldatei nicht gefunden: {src}")
+    if sqlite_integrity(src) != "ok":
+        raise SystemExit("FEHLER: Integritätsprüfung der Quell-GPKG fehlgeschlagen.")
+
+    layers = list_feature_layers(src)
+    required = [MAIN_LAYER, *THEME_LAYERS]
+    missing = [layer for layer in required if layer not in layers]
+    if missing:
+        raise SystemExit(f"FEHLER: Pflichtlayer fehlen: {', '.join(missing)}")
+
+    theme_columns: dict[str, list[str]] = {}
+    for layer in THEME_LAYERS:
+        probe = gpd.read_file(src, layer=layer, rows=1)
+        theme_columns[layer] = [column for column in probe.columns if column != "geometry"]
+    return layers, theme_columns
+
+
+def write_updated_layers(
+    src: Path,
+    dst: Path,
+    roads: gpd.GeoDataFrame,
+    theme_columns: dict[str, list[str]],
+) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        raise SystemExit(f"FEHLER: Zieldatei existiert bereits: {dst}")
+    if src.resolve() == dst.resolve():
+        raise SystemExit("FEHLER: Quelle und Ziel dürfen nicht identisch sein.")
+
+    shutil.copy2(src, dst)
+    roads.to_file(dst, layer=MAIN_LAYER, driver="GPKG")
+    for layer in THEME_LAYERS:
+        columns = theme_columns[layer]
+        missing = [column for column in columns if column not in roads.columns]
+        if missing:
+            raise RuntimeError(f"{layer}: Felder fehlen im Hauptlayer: {missing}")
+        roads[[*columns, "geometry"]].to_file(dst, layer=layer, driver="GPKG")
+
+
+def verify_output(
+    src: Path,
+    dst: Path,
+    original_count: int,
+    expected_count: int,
+    original_layers: list[str],
+) -> None:
+    if sqlite_integrity(dst) != "ok":
+        raise RuntimeError("Integritätsprüfung der Ziel-GPKG fehlgeschlagen.")
+    output_layers = list_feature_layers(dst)
+    if set(output_layers) != set(original_layers) or len(output_layers) != len(original_layers):
+        raise RuntimeError("Die Menge der Feature-Layer wurde verändert.")
+
+    for layer in [MAIN_LAYER, *THEME_LAYERS]:
+        count = len(gpd.read_file(dst, layer=layer, ignore_geometry=True))
+        if count != expected_count:
+            raise RuntimeError(f"{layer}: {count} statt {expected_count} Datensätze")
+
+    with sqlite3.connect(src) as con_src, sqlite3.connect(dst) as con_dst:
+        src_styles = con_src.execute("SELECT COUNT(*) FROM layer_styles").fetchone()[0]
+        dst_styles = con_dst.execute("SELECT COUNT(*) FROM layer_styles").fetchone()[0]
+        if src_styles != dst_styles:
+            raise RuntimeError(f"Styles verändert: {src_styles} -> {dst_styles}")
+
+    print("\n=== Verifikation bestanden ===")
+    print(f"Quelle: {original_count} Straßensegmente")
+    print(f"Ziel:   {expected_count} Straßensegmente")
+    print(f"Layer:  {len(original_layers)} vollständig")
+    print(f"Styles: {src_styles} vollständig")
+    print("SQLite: integrity_check = ok")
+
+
+def main() -> None:
+    args = parse_args()
+    src = Path(args.src).expanduser().resolve()
+    dst = Path(args.dst).expanduser().resolve()
+
+    print("=== Script 39: Treppen-Ketten zusammenführen ===")
+    original_layers, theme_columns = validate_source(src)
+    roads = gpd.read_file(src, layer=MAIN_LAYER).reset_index(drop=True)
+    original_count = len(roads)
+    print(f"Quelle: {src}")
+    print(f"Straßensegmente: {original_count}")
+
+    components, merge_nodes = connected_step_components(roads)
+    print(f"Zusammenführbare Grad-2-Knoten: {merge_nodes}")
+    print(f"Treppen-Komponenten: {len(components)}")
+
+    removed: set[int] = set()
+    merged_rows: list[pd.Series] = []
+    skipped: list[tuple[list[int], str]] = []
+    for component_indices in components:
+        row, reason = create_merged_row(roads, component_indices)
+        if row is None:
+            skipped.append((component_indices, str(reason)))
+            continue
+        removed.update(component_indices)
+        merged_rows.append(row)
+
+    if skipped:
+        print(f"WARNUNG: {len(skipped)} Komponenten übersprungen:")
+        for indices, reason in skipped[:20]:
+            print(f"  {indices}: {reason}")
+        if len(skipped) > 20:
+            print(f"  ... weitere {len(skipped) - 20}")
+
+    if merged_rows:
+        unchanged = roads.drop(index=sorted(removed))
+        additions = gpd.GeoDataFrame(merged_rows, columns=roads.columns, crs=roads.crs)
+        result = gpd.GeoDataFrame(
+            pd.concat([unchanged, additions], ignore_index=True),
+            geometry="geometry",
+            crs=roads.crs,
+        )
+    else:
+        result = roads.copy()
+
+    expected_count = original_count - len(removed) + len(merged_rows)
+    if len(result) != expected_count:
+        raise RuntimeError("Interner Fehler bei der Segmentzählung.")
+
+    print(f"Entfernte Teilsegmente: {len(removed)}")
+    print(f"Neue zusammengeführte Segmente: {len(merged_rows)}")
+    print(f"Netto-Reduktion: {original_count - expected_count}")
+
+    write_updated_layers(src, dst, result, theme_columns)
+    verify_output(src, dst, original_count, expected_count, original_layers)
+    print(f"\nFertig: {dst}")
+
+
+if __name__ == "__main__":
+    main()

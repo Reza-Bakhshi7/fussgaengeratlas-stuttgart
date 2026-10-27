@@ -1,0 +1,330 @@
+{
+  "reviewed_at": "2026-10-27",
+  "scope": "Structural and text-pattern checks on supplied source extracts; no complete topology or photograph-content audit. No external images were downloaded. Empty pattern counts do not guarantee absence of personal data.",
+  "files": [
+    {
+      "path": "source_metadata/boundary/Gemeinde_Stuttgart.gpkg",
+      "integrity": "ok",
+      "text_values": 71,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "Gemeinde_Stuttgart",
+          "Gemeinde_Stuttgart",
+          "2024-12-31",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/noise/industrielrm_tag_inspire_datenbw.gpkg",
+      "integrity": "ok",
+      "text_values": 3074,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "industrielrm_tag_inspire_datenbw",
+          "industrielrm_tag_inspire_datenbw",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/noise/schienenlrm_tag_inspire_datenbw.gpkg",
+      "integrity": "ok",
+      "text_values": 3152,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "schienenlrm_tag_inspire_datenbw",
+          "schienenlrm_tag_inspire_datenbw",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/noise/straenlrm_tag_inspire_datenbw.gpkg",
+      "integrity": "ok",
+      "text_values": 11173,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "straenlrm_tag_inspire_datenbw",
+          "straenlrm_tag_inspire_datenbw",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/ampeluebergaenge.gpkg",
+      "integrity": "ok",
+      "text_values": 40970,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "osm_ampeluebergaenge_stuttgart_clean",
+          "osm_ampeluebergaenge_stuttgart_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/aufzuege.gpkg",
+      "integrity": "ok",
+      "text_values": 3558,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "Aufzuege_Stuttgart",
+          "Aufzuege_Stuttgart",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/baeume.gpkg",
+      "integrity": "ok",
+      "text_values": 93800,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "osm_baeume_stuttgart_clean",
+          "osm_baeume_stuttgart_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/barrieren_tore.gpkg",
+      "integrity": "ok",
+      "text_values": 7919,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "osm_barrieren_tore_stuttgart_clean",
+          "osm_barrieren_tore_stuttgart_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/bordstein_abgesenkt.gpkg",
+      "integrity": "ok",
+      "text_values": 2645,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "Bordstein_abgesenkt_clean",
+          "Bordstein_abgesenkt_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/bordstein_erhoeht.gpkg",
+      "integrity": "ok",
+      "text_values": 825,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "Bordstein_erhoeht_clean",
+          "Bordstein_erhoeht_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/sitzbaenke.gpkg",
+      "integrity": "ok",
+      "text_values": 29765,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "osm_sitzbaenke_stuttgart_clean",
+          "osm_sitzbaenke_stuttgart_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/unterstande.gpkg",
+      "integrity": "ok",
+      "text_values": 488,
+      "pattern_counts": {},
+      "layers": [
+        [
+          "osm_unterstande_stuttgart_clean",
+          "osm_unterstande_stuttgart_clean",
+          "",
+          25832
+        ]
+      ]
+    },
+    {
+      "path": "source_metadata/osm/Baume_OSM.geojson",
+      "features": 23486,
+      "pattern_counts": {
+        "email": 0,
+        "credential": 0,
+        "local_path": 0
+      }
+    },
+    {
+      "path": "source_metadata/osm/gis_osm_roads_free_1.zip",
+      "archive_integrity": null,
+      "entries": [
+        "gis_osm_roads_free_1.dbf"
+      ],
+      "dbf_patterns": {
+        "email": 0,
+        "credential": 0,
+        "local_path": 0
+      }
+    },
+    {
+      "path": "source_metadata/bfrk/BFRK_Aufzug.csv",
+      "rows": 487,
+      "pattern_counts": {
+        "email": 0,
+        "private_key": 0,
+        "token": 0,
+        "local_path": 0
+      },
+      "columns": [
+        "ID",
+        "HST_DHID",
+        "HST_Name",
+        "Datenquelle",
+        "Datenstatus",
+        "Longitude",
+        "Latitude",
+        "Koordinatenqualität",
+        "OSM_ID",
+        "Tuerweite_cm",
+        "Kabinenbreite_cm",
+        "Kabinenlaenge_cm",
+        "Verbindungsfunktion",
+        "Aufzug_Foto",
+        "Aufzug_ID_Foto",
+        "Aufzug_Stoerungkontakt_Foto",
+        "Aufzug_Ebene1_Foto",
+        "Aufzug_Ebene2_Foto",
+        "Aufzug_Ebene3_Foto",
+        "Aufzug_Bedienelemente_Foto",
+        "Erfassungsdatum",
+        "Laufzeit_sek",
+        "Aufzug_Ebene1Weg2_Foto",
+        "Aufzug_Ebene2Weg2_Foto",
+        "Aufzug_Ebene3Weg2_Foto",
+        "DB-FaSta-ID"
+      ]
+    },
+    {
+      "path": "source_metadata/bfrk/BFRK_Rampe.csv",
+      "rows": 3299,
+      "pattern_counts": {
+        "email": 0,
+        "private_key": 0,
+        "token": 0,
+        "local_path": 0
+      },
+      "columns": [
+        "ID",
+        "HST_DHID",
+        "HST_Name",
+        "Datenquelle",
+        "Datenstatus",
+        "Longitude",
+        "Latitude",
+        "Koordinatenqualität",
+        "OSM_ID",
+        "Laenge_cm",
+        "Breite_cm",
+        "Laengsneigung_prozent",
+        "Querneigung_prozent",
+        "Verbindungsfunktion",
+        "Rampe_Foto",
+        "Richtung1_Foto",
+        "Richtung2_Foto",
+        "Erfassungsdatum"
+      ]
+    },
+    {
+      "path": "source_metadata/bfrk/BFRK_Rolltreppe.csv",
+      "rows": 97,
+      "pattern_counts": {
+        "email": 0,
+        "private_key": 0,
+        "token": 0,
+        "local_path": 0
+      },
+      "columns": [
+        "ID",
+        "HST_DHID",
+        "HST_Name",
+        "Datenquelle",
+        "Datenstatus",
+        "Longitude",
+        "Latitude",
+        "Koordinatenqualität",
+        "OSM_ID",
+        "Transportrichtung",
+        "Wechselnde_Richtung",
+        "Laufzeit_sek",
+        "Verbindungsfunktion",
+        "Rolltreppe_Foto",
+        "Rolltreppe_ID_Foto",
+        "Richtung1_Foto",
+        "Richtung2_Foto",
+        "Erfassungsdatum"
+      ]
+    },
+    {
+      "path": "source_metadata/bfrk/BFRK_Treppe.csv",
+      "rows": 2768,
+      "pattern_counts": {
+        "email": 0,
+        "private_key": 0,
+        "token": 0,
+        "local_path": 0
+      },
+      "columns": [
+        "ID",
+        "HST_DHID",
+        "HST_Name",
+        "Datenquelle",
+        "Datenstatus",
+        "Longitude",
+        "Latitude",
+        "Koordinatenqualität",
+        "OSM_ID",
+        "AnzahlStufen",
+        "Stufenhoehe_cm",
+        "Handlauf_links",
+        "Handlauf_rechts",
+        "Handlauf_mittig",
+        "Fahrradrille",
+        "Verbindungsfunktion",
+        "Treppe_Foto",
+        "Treppe_Richtung1_Foto",
+        "Treppe_Richtung2_Foto",
+        "Erfassungsdatum",
+        "Handlauf_Zielangabe_links",
+        "Handlauf_Zielangabe_rechts",
+        "Handlauf_Zielangabe_mittig",
+        "oben_Richtung1_Foto",
+        "oben_Richtung2_Foto"
+      ]
+    }
+  ]
+}
