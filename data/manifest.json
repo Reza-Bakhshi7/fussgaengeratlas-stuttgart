@@ -1,0 +1,62 @@
+{
+  "output": "Fussgaengeratlas_Stuttgart.gpkg",
+  "sha256": "ccc2e6b3f406e530547da73b7d1f7e02f01ea5ddb0ca3300996398603c34a1e7",
+  "size_bytes": 263344128,
+  "parts": [
+    {
+      "name": "network.gpkg.gz.part001",
+      "size_bytes": 8388608,
+      "sha256": "398f8142cdd6bc93c3fcc7136e694b02e5a3e4396a5e336d093daa055e81ae7d"
+    },
+    {
+      "name": "network.gpkg.gz.part002",
+      "size_bytes": 8388608,
+      "sha256": "e6dbf862572ef2cff65e7ab324498840942ce80a44dfe1038cd02f4983476e1b"
+    },
+    {
+      "name": "network.gpkg.gz.part003",
+      "size_bytes": 8388608,
+      "sha256": "1d8e35a26f60dc71d1f005981af03e9969169e9d95530ad7a47d54f6570f11d4"
+    },
+    {
+      "name": "network.gpkg.gz.part004",
+      "size_bytes": 8388608,
+      "sha256": "cba0b1230c24e13b0f7f97c53c75c186566b9bdf99999fb1b326dfbe2a6aba05"
+    },
+    {
+      "name": "network.gpkg.gz.part005",
+      "size_bytes": 8388608,
+      "sha256": "bef88b0ed870e5b49d7c3ad577792d01f7cff78029ca375ad106a6df4267ee39"
+    },
+    {
+      "name": "network.gpkg.gz.part006",
+      "size_bytes": 8388608,
+      "sha256": "1da86ef90a92737c13741d3e408ec2b926fed867e446fa8c34e26d0896c93d6e"
+    },
+    {
+      "name": "network.gpkg.gz.part007",
+      "size_bytes": 8388608,
+      "sha256": "cb3f7c6391978cfd9f43ed0b0e73aef6107a527d7c5a65af023598790150488e"
+    },
+    {
+      "name": "network.gpkg.gz.part008",
+      "size_bytes": 8388608,
+      "sha256": "503364666ad7d04460582dcbba780436040101a62f85a3ad3f16ece8fb6560aa"
+    },
+    {
+      "name": "network.gpkg.gz.part009",
+      "size_bytes": 8388608,
+      "sha256": "bbefcb48d6da43c9745e3c7bc086b54b2e9d24fed7175d9e67a2a32b94215275"
+    },
+    {
+      "name": "network.gpkg.gz.part010",
+      "size_bytes": 8388608,
+      "sha256": "8aedae41edbcdb820e32652e048872639a1892b7109fda610613578ea2fd2578"
+    },
+    {
+      "name": "network.gpkg.gz.part011",
+      "size_bytes": 7908165,
+      "sha256": "2c9619b2dd3591f74b2a2a7f151f0ec3a3941752f0f3b82475e8ca0496a6ba59"
+    }
+  ]
+}

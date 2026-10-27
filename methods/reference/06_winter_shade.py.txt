@@ -1,0 +1,306 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_37_winterschatten_v5.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+"""
+================================================================================
+Script 37 v5 — Winter-Schattenmodell Stuttgart (FINAL)
+Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+Datum: 30.07.2026
+================================================================================
+Referenzdatum: 21. Dezember (Wintersonnenwende)
+
+ZEITPUNKTE — methodische Entscheidung:
+  Berechnet werden alle 6 Zeitpunkte wie im Sommer (8/10/12/14/16/18 Uhr MEZ).
+  Am 21. Dezember steht die Sonne um 08:00 und 18:00 Uhr unter dem Horizont
+  (Elevation -8.2°). Diese beiden Zeitpunkte gehen NICHT in den Mittelwert ein.
+
+  Begründung: Würden sie mit shadow_pct=100% einbezogen, ergäbe sich ein
+  konstanter Offset von +33.3 Prozentpunkten auf jedes Segment. Der mögliche
+  Wertebereich wäre 33.3–100% statt 0–100%; die Klassen 'none' (<10%) und
+  'low' (10–30%) wären mathematisch unerreichbar. Die Nachtstunden tragen
+  keine Information über die gebaute Umgebung bei — nachts gibt es überall
+  weder Schatten noch Sonne.
+
+  shadow_pct_winter bedeutet daher: Anteil des Segments im Schatten,
+  gemittelt über die Zeitpunkte mit Sonne über dem Horizont
+  (10/12/14/16 Uhr MEZ). Direkt vergleichbar mit shadow_pct (Sommer).
+
+Gebäude: gebaeude_hoehe2.gpkg, Feld hoehe_m, Standard 9m (project assumption; no standards basis verified)
+Bäume:   keine — Laubbäume im Dezember blattlos
+Wald:    shadow_pct_winter=NULL, shadow_class_winter='forest'
+
+Optimierungsgeschichte:
+  v1 unary_union pro Segment | v2 globaler unary_union (zu langsam)
+  v3 STRtree vectorisiert, 2D-Union (zu langsam)
+  v4 1D-Linien-Union + prepare + simplify → 1.8 Minuten
+  v5 nur Tageslicht-Zeitpunkte im Mittel + layer_styles CREATE TABLE
+
+Input:  Fussgaengeratlas_29072026.gpkg
+Output: Fussgaengeratlas_29072026a.gpkg
+================================================================================
+"""
+
+import os, math, sqlite3, time
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+import shapely
+from shapely.affinity import translate
+from shapely.strtree import STRtree
+
+
+BASE     = r"<LOCAL_PATH>/Projekt"
+GPKG_SRC = os.path.join(BASE, r"Daten\Final\Fussgaengeratlas_29072026.gpkg")
+GPKG_DST = os.path.join(BASE, r"Daten\Final\Fussgaengeratlas_30072026a.gpkg")
+GEBAEUDE = os.path.join(BASE, r"Daten\Sonstige\OSM\gebaeude_hoehe2.gpkg")
+FOREST   = os.path.join(BASE, r"Daten\Sonstige\OSM\forest_gis_osm_landuse_a_free_stuttgart.gpkg")
+
+H_DEFAULT   = 9.0
+ZEITPUNKTE  = [8, 10, 12, 14, 16, 18]
+KACHELN     = 8
+PUFFER      = 300
+SIMPLIFY_M  = 1.0
+
+
+def sonnenpos(stunde_mez):
+    stunde_utc = stunde_mez - 1
+    lat  = math.radians(48.775)
+    dekl = math.radians(23.45 * math.sin(math.radians(360/365*(355-81))))
+    hw   = math.radians(15*(stunde_utc-12))
+    sin_el = math.sin(lat)*math.sin(dekl) + math.cos(lat)*math.cos(dekl)*math.cos(hw)
+    el = math.degrees(math.asin(max(-1.0, min(1.0, sin_el))))
+    if el <= 0:
+        return None, el
+    cos_az = (math.sin(dekl)-math.sin(lat)*sin_el) / (math.cos(lat)*math.cos(math.radians(el))+1e-10)
+    az = math.degrees(math.acos(max(-1.0, min(1.0, cos_az))))
+    if hw > 0:
+        az = 360 - az
+    return az, el
+
+
+def shadow_class(pct):
+    if pct is None or (isinstance(pct, float) and math.isnan(pct)): return None
+    if pct < 10: return 'none'
+    if pct < 30: return 'low'
+    if pct < 60: return 'medium'
+    return 'high'
+
+
+def list_layers(gpkg):
+    con = sqlite3.connect(gpkg)
+    cur = con.cursor()
+    cur.execute("SELECT table_name FROM gpkg_contents WHERE data_type='features'")
+    layers = [r[0] for r in cur.fetchall()]
+    con.close()
+    return layers
+
+
+def migrate_styles(src, dst):
+    """layer_styles migrieren. Legt die Tabelle im Ziel an falls nicht vorhanden
+    (GeoPandas to_file() erzeugt sie nicht)."""
+    con_src = sqlite3.connect(src)
+    con_dst = sqlite3.connect(dst)
+    try:
+        cur = con_src.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='layer_styles'")
+        if not cur.fetchone():
+            print("  Keine layer_styles in Quelle.")
+            return
+
+        cols   = [d[1] for d in con_src.execute("PRAGMA table_info(layer_styles)").fetchall()]
+        styles = con_src.execute("SELECT * FROM layer_styles").fetchall()
+
+        cur_dst = con_dst.cursor()
+        cur_dst.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='layer_styles'")
+        if not cur_dst.fetchone():
+            col_defs = ', '.join(f'"{c}" TEXT' for c in cols)
+            cur_dst.execute(f"CREATE TABLE layer_styles ({col_defs})")
+            print("  Tabelle layer_styles angelegt.")
+
+        ph = ','.join(['?'] * len(cols))
+        cur_dst.execute("DELETE FROM layer_styles")
+        cur_dst.executemany(f"INSERT INTO layer_styles VALUES ({ph})", styles)
+        con_dst.commit()
+        print(f"  {len(styles)} Styles migriert.")
+    finally:
+        con_src.close()
+        con_dst.close()
+
+
+def script_37_winterschatten_v5():
+    print("=== Script 37 v5: Winter-Schattenmodell ===\n")
+    t_start = time.time()
+
+    if os.path.exists(GPKG_DST):
+        print(f"FEHLER: {GPKG_DST} existiert bereits — abgebrochen.")
+        return
+
+    # Sonnenposition — Zeitpunkte mit Sonne über Horizont identifizieren
+    sun_params  = [(t, *sonnenpos(t)) for t in ZEITPUNKTE]
+    tag_indices = [i for i, (t, az, el) in enumerate(sun_params) if az is not None]
+
+    print("Sonnenposition Stuttgart, 21. Dezember, MEZ:")
+    for t, az, el in sun_params:
+        if az is None:
+            print(f"  {t:02d}:00 — El {el:.1f}° (unter Horizont) → nicht im Mittelwert")
+        else:
+            sl = 1.0 / math.tan(math.radians(el))
+            print(f"  {t:02d}:00 — Az {az:.1f}°, El {el:.1f}° "
+                  f"(Schattenlänge {H_DEFAULT*sl:.0f}m bei 9m Gebäude)")
+    print(f"\nMittelwert über {len(tag_indices)} Tageslicht-Zeitpunkte: "
+          f"{[ZEITPUNKTE[i] for i in tag_indices]} Uhr MEZ")
+
+    print("\nLade Strassen...")
+    gdf = gpd.read_file(GPKG_SRC, layer='Strassen').reset_index(drop=True)
+    print(f"  {len(gdf)} Segmente")
+
+    print("Lade Gebäude...")
+    geb = gpd.read_file(GEBAEUDE).to_crs(gdf.crs)
+    geb['hoehe'] = pd.to_numeric(geb['hoehe_m'], errors='coerce').fillna(H_DEFAULT)
+    geb = geb[geb.geometry.notna() & geb.geometry.is_valid].reset_index(drop=True)
+    geb['geometry'] = geb.geometry.simplify(SIMPLIFY_M, preserve_topology=True)
+    print(f"  {len(geb)} Gebäude (vereinfacht auf {SIMPLIFY_M}m)")
+
+    print("Lade Wald...")
+    forest_gdf = gpd.read_file(FOREST).to_crs(gdf.crs)
+    gdf['_pos'] = range(len(gdf))
+    joined = gpd.sjoin(gdf[['_pos','geometry']], forest_gdf[['geometry']],
+                       how='inner', predicate='intersects')
+    forest_pos = set(joined['_pos'].tolist())
+    gdf.drop(columns=['_pos'], inplace=True)
+    print(f"  {len(forest_pos)} Forest-Segmente")
+
+    geb_geoms_all = geb.geometry.values
+    geb_hoehe_all = geb['hoehe'].values
+    geb_tree      = STRtree(geb_geoms_all)
+
+    xmin, ymin, xmax, ymax = gdf.total_bounds
+    xs = np.linspace(xmin, xmax, KACHELN+1)
+    ys = np.linspace(ymin, ymax, KACHELN+1)
+
+    # Matrix nur für die Tageslicht-Zeitpunkte
+    shadow_matrix = np.full((len(tag_indices), len(gdf)), np.nan)
+
+    cx = gdf.geometry.centroid.x.values
+    cy = gdf.geometry.centroid.y.values
+
+    n_kacheln = KACHELN * KACHELN
+    print(f"\nSchattenberechnung ({n_kacheln} Kacheln):")
+    kachel_nr = 0
+
+    for ix in range(KACHELN):
+        for iy in range(KACHELN):
+            kachel_nr += 1
+            seg_pos = np.where(
+                (cx>=xs[ix])&(cx<xs[ix+1])&(cy>=ys[iy])&(cy<ys[iy+1])
+            )[0]
+            if not len(seg_pos):
+                continue
+
+            t_kachel = time.time()
+            seg_arr  = gdf.geometry.values[seg_pos]
+            seg_len  = shapely.length(seg_arr)
+
+            tile_box  = shapely.box(xs[ix]-PUFFER, ys[iy]-PUFFER,
+                                    xs[ix+1]+PUFFER, ys[iy+1]+PUFFER)
+            geb_idx   = geb_tree.query(tile_box, predicate='intersects')
+            geb_geoms = geb_geoms_all[geb_idx]
+            geb_hoehe = geb_hoehe_all[geb_idx]
+
+            print(f"  [{kachel_nr:2d}/{n_kacheln}] ({ix},{iy}): "
+                  f"{len(seg_pos):5d} Seg, {len(geb_geoms):5d} Geb", end='', flush=True)
+
+            for m_i, t_i in enumerate(tag_indices):
+                t, az, el = sun_params[t_i]
+
+                if not len(geb_geoms):
+                    shadow_matrix[m_i, seg_pos] = 0.0
+                    continue
+
+                sl   = 1.0 / math.tan(math.radians(el))
+                dr   = math.radians((az+180) % 360)
+                dx_f = math.sin(dr)
+                dy_f = math.cos(dr)
+
+                offs    = geb_hoehe * sl
+                shifted = np.array(
+                    [translate(g, ox*dx_f, ox*dy_f) for g, ox in zip(geb_geoms, offs)],
+                    dtype=object
+                )
+                polys = shapely.convex_hull(shapely.union(geb_geoms, shifted))
+                shapely.prepare(polys)
+
+                tree = STRtree(polys)
+                seg_idx, poly_idx = tree.query(seg_arr, predicate='intersects')
+
+                coverage = np.zeros(len(seg_arr))
+                if len(seg_idx):
+                    order  = np.argsort(seg_idx, kind='stable')
+                    seg_s  = seg_idx[order]
+                    poly_s = poly_idx[order]
+                    uniq   = np.unique(seg_s)
+                    starts = np.searchsorted(seg_s, uniq, side='left')
+                    ends   = np.append(starts[1:], len(seg_s))
+
+                    for k, si in enumerate(uniq):
+                        cand = polys[poly_s[starts[k]:ends[k]]]
+                        try:
+                            # Segment × Kandidat → Linien, dann 1D-Union
+                            pieces = shapely.intersection(seg_arr[si], cand)
+                            merged = shapely.union_all(pieces)
+                            if seg_len[si] > 0:
+                                coverage[si] = min(
+                                    100.0,
+                                    shapely.length(merged) / seg_len[si] * 100
+                                )
+                        except Exception:
+                            coverage[si] = 0.0
+
+                shadow_matrix[m_i, seg_pos] = coverage
+
+            print(f"  ({time.time()-t_kachel:.1f}s)", flush=True)
+
+    print(f"\nBerechnung fertig in {(time.time()-t_start)/60:.1f} Minuten.")
+    print("Berechne Tagesmittel (nur Tageslicht-Zeitpunkte)...")
+
+    gdf['shadow_pct_winter'] = np.round(np.nanmean(shadow_matrix, axis=0), 1)
+    gdf['sun_pct_winter']    = np.round(100 - gdf['shadow_pct_winter'], 1)
+    gdf.loc[list(forest_pos), ['shadow_pct_winter','sun_pct_winter']] = np.nan
+    gdf['shadow_class_winter'] = gdf['shadow_pct_winter'].apply(shadow_class)
+    gdf.loc[list(forest_pos), 'shadow_class_winter'] = 'forest'
+
+    print(f"\nshadow_pct_winter Ø: {gdf['shadow_pct_winter'].mean():.1f}%")
+    print(f"(Vergleich Sommer shadow_pct Ø: 25.2%)")
+    print(f"\nKlassenverteilung shadow_class_winter:")
+    vc = gdf['shadow_class_winter'].value_counts(dropna=False)
+    for cls in ['none', 'low', 'medium', 'high', 'forest']:
+        n = vc.get(cls, 0)
+        print(f"  {cls:<8}: {n:>6}  ({n/len(gdf)*100:.1f}%)")
+
+    print(f"\nBaue GPKG auf: {GPKG_DST}")
+    first = True
+    for lname in list_layers(GPKG_SRC):
+        lgdf = gdf if lname == 'Strassen' else gpd.read_file(GPKG_SRC, layer=lname)
+        lgdf.to_file(GPKG_DST, layer=lname, driver='GPKG', mode='w' if first else 'a')
+        first = False
+        print(f"  {lname}: {len(lgdf)}")
+
+    base = ['osm_id','name','fclass','fclass_display','correction_note',
+            'length_m','bridge','tunnel',
+            'shadow_pct_winter','sun_pct_winter','shadow_class_winter','geometry']
+    gdf[[c for c in base if c in gdf.columns]].to_file(
+        GPKG_DST, layer='Strassen_Schatten_Winter', driver='GPKG', mode='a')
+    print(f"  Strassen_Schatten_Winter: {len(gdf)}")
+
+    print("\nMigriere layer_styles...")
+    migrate_styles(GPKG_SRC, GPKG_DST)
+    print("  Hinweis: Style für Strassen_Schatten_Winter → Script 37b (QGIS Console)")
+
+    print(f"\nFertig: {GPKG_DST}")
+    print(f"Gesamtlaufzeit: {(time.time()-t_start)/60:.1f} Minuten")
+
+
+if __name__ == '__main__':
+    script_37_winterschatten_v5()

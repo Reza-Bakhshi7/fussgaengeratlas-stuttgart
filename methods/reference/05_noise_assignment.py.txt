@@ -1,0 +1,120 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_36_laerm_v2.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+# script_36_laerm_v2.py
+# Korrigierter Spatial Join: per DataFrame-Index, nicht osm_id
+# Erstellt Fussgaengeratlas_29072026.gpkg neu
+
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+import sqlite3
+import shutil
+import os
+
+ROOT     = r"<LOCAL_PATH>/Projekt"
+GPKG_IN  = os.path.join(ROOT, r"Daten\Final\Fussgaengeratlas_23072026.gpkg")
+GPKG_OUT = os.path.join(ROOT, r"Daten\Final\Fussgaengeratlas_29072026.gpkg")
+LAERM_DIR = os.path.join(ROOT, r"Weiterentwicklung\Zusätzliche_Daten\Laerm")
+
+NOISE_FILES = {
+    "road": os.path.join(LAERM_DIR, "straenlrm_tag_inspire_datenbw.gpkg"),
+    "rail": os.path.join(LAERM_DIR, "schienenlrm_tag_inspire_datenbw.gpkg"),
+    "ind":  os.path.join(LAERM_DIR, "industrielrm_tag_inspire_datenbw.gpkg"),
+}
+
+BREAKS  = [55, 60, 65, 70, 75]
+CLASSES = ["maessig", "erhoeht", "hoch", "sehr_hoch", "extrem"]
+
+def get_first_layer(path):
+    con = sqlite3.connect(path)
+    name = con.execute("SELECT table_name FROM gpkg_contents LIMIT 1").fetchone()[0]
+    con.close()
+    return name
+
+def load_noise(path):
+    gdf = gpd.read_file(path, layer=get_first_layer(path))[["measure", "geometry"]]
+    gdf = gdf[gdf["measure"].notna()].copy()
+    gdf["measure"] = gdf["measure"].astype(float)
+    return gdf.to_crs(epsg=25832)
+
+def log_combine(row):
+    vals = [row["noise_road_db"], row["noise_rail_db"], row["noise_ind_db"]]
+    valid = [v for v in vals if pd.notna(v) and v > 0]
+    if not valid:
+        return np.nan
+    return 10 * np.log10(sum(10 ** (v / 10) for v in valid))
+
+def classify(db):
+    if pd.isna(db):
+        return "ruhig"
+    for i, t in enumerate(BREAKS):
+        if db < t:
+            return CLASSES[i]
+    return CLASSES[-1]
+
+def migrate_styles(src, dst):
+    src_con = sqlite3.connect(src)
+    dst_con = sqlite3.connect(dst)
+    try:
+        styles = src_con.execute("SELECT * FROM layer_styles").fetchall()
+        cols   = [d[1] for d in src_con.execute("PRAGMA table_info(layer_styles)").fetchall()]
+        placeholders = ",".join(["?"] * len(cols))
+        dst_con.execute("DELETE FROM layer_styles")
+        dst_con.executemany(f"INSERT OR REPLACE INTO layer_styles VALUES ({placeholders})", styles)
+        dst_con.commit()
+        print(f"  {len(styles)} Styles migriert.")
+    finally:
+        src_con.close()
+        dst_con.close()
+
+print("=== Script 36 v2: Lärm-Integration ===\n")
+
+strassen = gpd.read_file(GPKG_IN, layer="Strassen")
+print(f"Segmente: {len(strassen)}")
+
+# Centroids mit DataFrame-Index (nicht osm_id)
+centroids = strassen.copy()
+centroids["geometry"] = strassen.geometry.centroid
+centroids = centroids.reset_index(drop=True)  # sauberer Index 0..N
+
+field_map = {"road": "noise_road_db", "rail": "noise_rail_db", "ind": "noise_ind_db"}
+
+for key, field in field_map.items():
+    print(f"Verarbeite {key}...")
+    noise = load_noise(NOISE_FILES[key])
+    joined = gpd.sjoin(
+        centroids[["geometry"]],
+        noise[["measure", "geometry"]],
+        how="left",
+        predicate="within"
+    )
+    # Mehrfachtreffer: höchsten Wert pro Segment-Index
+    joined = joined.groupby(joined.index)["measure"].max()
+    strassen[field] = joined.values
+    n_hit = strassen[field].notna().sum()
+    print(f"  Treffer: {n_hit} ({n_hit/len(strassen)*100:.1f}%)")
+
+print("Kombiniere...")
+strassen["noise_db"]    = strassen.apply(log_combine, axis=1).round(1)
+strassen["noise_class"] = strassen["noise_db"].apply(classify)
+print(strassen["noise_class"].value_counts().to_string())
+
+print(f"\nErstelle {os.path.basename(GPKG_OUT)}...")
+if os.path.exists(GPKG_OUT):
+    os.remove(GPKG_OUT)
+shutil.copy2(GPKG_IN, GPKG_OUT)
+
+strassen.to_file(GPKG_OUT, layer="Strassen", driver="GPKG")
+
+noise_fields = ["osm_id", "fclass", "fclass_display", "name",
+                "noise_road_db", "noise_rail_db", "noise_ind_db",
+                "noise_db", "noise_class", "geometry"]
+strassen[noise_fields].to_file(GPKG_OUT, layer="Strassen_Laerm", driver="GPKG")
+
+print("Migriere Styles...")
+migrate_styles(GPKG_IN, GPKG_OUT)
+
+print("\nFertig.")

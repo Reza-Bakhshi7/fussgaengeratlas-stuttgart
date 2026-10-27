@@ -1,0 +1,362 @@
+{
+  "integrity": "ok",
+  "foreign_key_errors": 0,
+  "themes": {
+    "Surface": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "name": 0,
+        "fclass": 0,
+        "ref": 0,
+        "length_m": 0,
+        "elev_start": 0,
+        "elev_end": 0,
+        "elev_diff": 0,
+        "slope_pct": 0,
+        "slope_dir": 0,
+        "slope_class": 0,
+        "bridge": 0,
+        "tunnel": 0,
+        "surface": 0,
+        "smoothness": 0,
+        "width": 0,
+        "lit": 0,
+        "wheelchair": 0,
+        "incline": 0,
+        "handrail": 0,
+        "tactile_paving": 0,
+        "step_count": 0,
+        "ramp": 0,
+        "ramp_wheelchair": 0,
+        "arrow_angle": 0,
+        "shadow_pct": 0,
+        "sun_pct": 0,
+        "shadow_class": 0,
+        "correction_note": 0,
+        "fclass_display": 0,
+        "utci_avg": 0,
+        "utci_class": 0,
+        "wind_speed_base": 0,
+        "wind_dir_base": 0,
+        "segment_azimut": 0,
+        "wind_alignment": 0,
+        "tpi": 0,
+        "building_density": 0,
+        "wind_exposure_index": 0,
+        "wind_exposure_class": 0,
+        "wind_comfort_summer": 0,
+        "wind_comfort_winter": 0,
+        "surface_class": 0
+      }
+    },
+    "Wind": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "name": 0,
+        "fclass": 0,
+        "fclass_display": 0,
+        "wind_speed_base": 0,
+        "wind_dir_base": 0,
+        "segment_azimut": 0,
+        "wind_alignment": 0,
+        "tpi": 0,
+        "building_density": 0,
+        "wind_exposure_index": 0,
+        "wind_exposure_class": 0,
+        "wind_comfort_summer": 0,
+        "wind_comfort_winter": 0
+      }
+    },
+    "Noise": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "fclass": 0,
+        "fclass_display": 0,
+        "name": 0,
+        "noise_road_db": 0,
+        "noise_rail_db": 0,
+        "noise_ind_db": 0,
+        "noise_db": 0,
+        "noise_class": 0
+      }
+    },
+    "Shade_Summer": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "name": 0,
+        "fclass": 0,
+        "shadow_pct": 0,
+        "sun_pct": 0,
+        "shadow_class": 0
+      }
+    },
+    "Shade_Winter": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "name": 0,
+        "fclass": 0,
+        "fclass_display": 0,
+        "correction_note": 0,
+        "length_m": 0,
+        "bridge": 0,
+        "tunnel": 0,
+        "shadow_pct_winter": 0,
+        "sun_pct_winter": 0,
+        "shadow_class_winter": 0
+      }
+    },
+    "UTCI_Summer": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "name": 0,
+        "fclass": 0,
+        "utci_avg": 0,
+        "utci_class": 0
+      }
+    },
+    "UTCI_Winter": {
+      "count": 69769,
+      "has_atlas_id": true,
+      "missing_from_network": 0,
+      "geometry_mismatches": 0,
+      "attribute_mismatches": {
+        "osm_id": 0,
+        "name": 0,
+        "fclass": 0,
+        "fclass_display": 0,
+        "correction_note": 0,
+        "length_m": 0,
+        "bridge": 0,
+        "tunnel": 0,
+        "utci_avg_winter": 0,
+        "utci_class_winter": 0
+      }
+    }
+  },
+  "classes": {
+    "slope_class": [
+      [
+        "flat",
+        41695
+      ],
+      [
+        "moderate",
+        13685
+      ],
+      [
+        "no_data",
+        8
+      ],
+      [
+        "steep",
+        6315
+      ],
+      [
+        "very_steep",
+        8066
+      ]
+    ],
+    "surface_class": [
+      [
+        "good",
+        21981
+      ],
+      [
+        "medium",
+        14122
+      ],
+      [
+        "poor",
+        4047
+      ],
+      [
+        "unknown",
+        29619
+      ]
+    ],
+    "wind_exposure_class": [
+      [
+        null,
+        8
+      ],
+      [
+        "exposed",
+        6267
+      ],
+      [
+        "moderate",
+        50979
+      ],
+      [
+        "sheltered",
+        12515
+      ]
+    ],
+    "noise_class": [
+      [
+        "elevated",
+        8226
+      ],
+      [
+        "extreme",
+        11370
+      ],
+      [
+        "high",
+        7049
+      ],
+      [
+        "quiet",
+        34523
+      ],
+      [
+        "very_high",
+        8601
+      ]
+    ],
+    "shadow_class": [
+      [
+        "forest",
+        6528
+      ],
+      [
+        "high",
+        9518
+      ],
+      [
+        "low",
+        12631
+      ],
+      [
+        "medium",
+        10737
+      ],
+      [
+        "none",
+        30355
+      ]
+    ],
+    "shadow_class_winter": [
+      [
+        "forest",
+        6528
+      ],
+      [
+        "high",
+        24380
+      ],
+      [
+        "low",
+        7644
+      ],
+      [
+        "medium",
+        10309
+      ],
+      [
+        "none",
+        20908
+      ]
+    ],
+    "utci_class": [
+      [
+        null,
+        6531
+      ],
+      [
+        "strong",
+        17897
+      ],
+      [
+        "very_strong",
+        45341
+      ]
+    ],
+    "utci_class_winter": [
+      [
+        null,
+        6528
+      ],
+      [
+        "moderate",
+        49410
+      ],
+      [
+        "strong",
+        13831
+      ]
+    ]
+  },
+  "ranges": {
+    "slope_pct": {
+      "min": 0.0,
+      "max": 4095.16,
+      "missing": 8
+    },
+    "length_m": {
+      "min": 0.04,
+      "max": 314.43,
+      "missing": 0
+    },
+    "shadow_pct": {
+      "min": 0.0,
+      "max": 100.0,
+      "missing": 6531
+    },
+    "shadow_pct_winter": {
+      "min": 0.0,
+      "max": 100.0,
+      "missing": 6528
+    },
+    "wind_exposure_index": {
+      "min": 0.0,
+      "max": 1.0,
+      "missing": 8
+    },
+    "utci_avg": {
+      "min": 36.300000000000004,
+      "max": 38.88333333333333,
+      "missing": 6531
+    },
+    "utci_avg_winter": {
+      "min": -14.3,
+      "max": -5.0,
+      "missing": 6528
+    },
+    "noise_db": {
+      "min": 55.0,
+      "max": 78.0,
+      "missing": 34523
+    }
+  },
+  "slope_over_60": 138,
+  "network_id": {
+    "records": 69769,
+    "unique_ids": 69769,
+    "missing": 0
+  }
+}

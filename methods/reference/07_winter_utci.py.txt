@@ -1,0 +1,211 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_38_winter_utci.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+"""
+================================================================================
+Script 38 — Winter-UTCI Stuttgart
+Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+Datum: 30.07.2026
+================================================================================
+
+Referenzszenario: Extremer Kältetag (scenario assumption; DWD percentile not verified)
+  Ta  = -5.0°C
+  v   = 3.0 m/s
+  RH  = 80%
+
+Referenzdatum: 21. Dezember — identisch zu Script 37
+Zeitpunkte:    10/12/14/16 Uhr MEZ (nur Tageslicht, analog Script 37 v5)
+               08:00 und 18:00 entfallen (Sonne unter Horizont)
+
+Tmrt-Formel Winter:
+  Tmrt = f_shade x (Ta - 2) + (1 - f_shade) x (Ta + delta_sun(elev))
+  delta_sun(elev) = max(10.0, 28.0 - 0.28 x elev)
+
+  Im Schatten: Tmrt = Ta - 2 (Himmelsstrahlung kuehlt den Koerper zusaetzlich)
+  In der Sonne: Tmrt = Ta + delta_sun (Sonnenstrahlung waermt auch im Winter)
+
+UTCI-Klassen Winter (Kaeltestress, Broede et al. 2012):
+  no_stress   > 9 Grad C
+  slight      0 bis 9
+  moderate   -13 bis 0
+  strong     -27 bis -13
+  very_strong < -27
+
+Neue Felder: utci_avg_winter, utci_class_winter
+  -> in Strassen + Strassen_UTCI_Winter (neuer Themen-Layer)
+
+Input:  Fussgaengeratlas_30072026a.gpkg
+Output: Fussgaengeratlas_30072026b.gpkg
+================================================================================
+"""
+
+import os, math, sqlite3, time
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+from pythermalcomfort.models import utci as calc_utci
+
+
+BASE     = r"<LOCAL_PATH>/Projekt"
+GPKG_SRC = os.path.join(BASE, r"Daten\Final\Fussgaengeratlas_30072026a.gpkg")
+GPKG_DST = os.path.join(BASE, r"Daten\Final\Fussgaengeratlas_30072026b.gpkg")
+
+TA          = -5.0
+V           =  3.0
+RH          = 80.0
+DELTA_SHADE = -2.0
+ZEITPUNKTE  = [8, 10, 12, 14, 16, 18]
+
+
+def sonnenpos_el(stunde_mez):
+    """Sonnenelevation Stuttgart, 21. Dezember, MEZ (UTC+1)."""
+    stunde_utc = stunde_mez - 1
+    lat  = math.radians(48.775)
+    dekl = math.radians(23.45 * math.sin(math.radians(360/365*(355-81))))
+    hw   = math.radians(15*(stunde_utc-12))
+    sin_el = math.sin(lat)*math.sin(dekl) + math.cos(lat)*math.cos(dekl)*math.cos(hw)
+    return math.degrees(math.asin(max(-1.0, min(1.0, sin_el))))
+
+
+def delta_sun(el):
+    return max(10.0, 28.0 - 0.28 * el)
+
+
+def classify_winter(u):
+    if u is None or (isinstance(u, float) and math.isnan(u)): return None
+    if u >   9: return 'no_stress'
+    if u >   0: return 'slight'
+    if u > -13: return 'moderate'
+    if u > -27: return 'strong'
+    return 'very_strong'
+
+
+def list_layers(gpkg):
+    con = sqlite3.connect(gpkg)
+    cur = con.cursor()
+    cur.execute("SELECT table_name FROM gpkg_contents WHERE data_type='features'")
+    layers = [r[0] for r in cur.fetchall()]
+    con.close()
+    return layers
+
+
+def migrate_styles(src, dst):
+    con_src = sqlite3.connect(src)
+    con_dst = sqlite3.connect(dst)
+    try:
+        cur = con_src.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='layer_styles'")
+        if not cur.fetchone():
+            print("  Keine layer_styles in Quelle.")
+            return
+
+        cols   = [d[1] for d in con_src.execute("PRAGMA table_info(layer_styles)").fetchall()]
+        styles = con_src.execute("SELECT * FROM layer_styles").fetchall()
+
+        cur_dst = con_dst.cursor()
+        cur_dst.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='layer_styles'")
+        if not cur_dst.fetchone():
+            col_defs = ', '.join(f'"{c}" TEXT' for c in cols)
+            cur_dst.execute(f"CREATE TABLE layer_styles ({col_defs})")
+            print("  Tabelle layer_styles angelegt.")
+
+        ph = ','.join(['?'] * len(cols))
+        cur_dst.execute("DELETE FROM layer_styles")
+        cur_dst.executemany(f"INSERT INTO layer_styles VALUES ({ph})", styles)
+        con_dst.commit()
+        print(f"  {len(styles)} Styles migriert.")
+    finally:
+        con_src.close()
+        con_dst.close()
+
+
+def script_38_winter_utci():
+    print("=== Script 38: Winter-UTCI (21. Dezember) ===\n")
+    t_start = time.time()
+
+    if os.path.exists(GPKG_DST):
+        print(f"FEHLER: {GPKG_DST} existiert bereits - abgebrochen.")
+        return
+
+    print("Referenzszenario Kaeltetag:")
+    print(f"  Ta={TA} C  |  v={V} m/s  |  RH={RH}%\n")
+
+    tageszeiten = []
+    print("Zeitpunkte:")
+    for t in ZEITPUNKTE:
+        el = sonnenpos_el(t)
+        if el <= 0:
+            print(f"  {t:02d}:00 MEZ - El {el:.1f} (unter Horizont) -> nicht im Mittelwert")
+        else:
+            ds = delta_sun(el)
+            tageszeiten.append((t, el))
+            print(f"  {t:02d}:00 MEZ - El {el:.1f} -> delta_sun={ds:.1f}, "
+                  f"Tmrt_sonne={TA+ds:.1f}, Tmrt_schatten={TA+DELTA_SHADE:.1f}")
+    print(f"\nMittelwert ueber {len(tageszeiten)} Tageslicht-Zeitpunkte: "
+          f"{[t for t, _ in tageszeiten]} Uhr MEZ")
+
+    print("\nLade Strassen...")
+    gdf = gpd.read_file(GPKG_SRC, layer='Strassen')
+    print(f"  {len(gdf)} Segmente")
+
+    if 'shadow_pct_winter' not in gdf.columns:
+        print("FEHLER: shadow_pct_winter fehlt - Script 37 zuerst ausfuehren.")
+        return
+
+    valid = gdf['shadow_pct_winter'].notna()
+    sp    = gdf.loc[valid, 'shadow_pct_winter'].values
+    n     = int(valid.sum())
+    print(f"  {n} mit shadow_pct_winter | {int((~valid).sum())} NULL (forest)")
+
+    print("\nUTCI-Berechnung:")
+    utci_stack = []
+    for t, el in tageszeiten:
+        f_shade = sp / 100.0
+        tmrt = f_shade * (TA + DELTA_SHADE) + (1.0 - f_shade) * (TA + delta_sun(el))
+        res   = calc_utci(tdb=np.full(n, TA), tr=tmrt, v=V, rh=RH, limit_inputs=False)
+        u_arr = np.asarray(res.utci)
+        utci_stack.append(u_arr)
+        print(f"  {t:02d}:00 - Tmrt Mittel {tmrt.mean():.1f} | UTCI Mittel {u_arr.mean():.1f}")
+
+    utci_avg = np.mean(np.column_stack(utci_stack), axis=1)
+
+    gdf['utci_avg_winter'] = np.nan
+    gdf.loc[valid, 'utci_avg_winter'] = np.round(utci_avg, 1)
+    gdf['utci_class_winter'] = gdf['utci_avg_winter'].apply(classify_winter)
+
+    print(f"\nutci_avg_winter Mittel: {gdf['utci_avg_winter'].mean():.1f}")
+    print(f"(Vergleich Sommer utci_avg Mittel: 38.2)")
+    print(f"\nKlassenverteilung utci_class_winter:")
+    vc = gdf['utci_class_winter'].value_counts(dropna=False)
+    for cls in ['no_stress', 'slight', 'moderate', 'strong', 'very_strong']:
+        cnt = vc.get(cls, 0)
+        print(f"  {cls:<12}: {cnt:>6}  ({cnt/len(gdf)*100:.1f}%)")
+    print(f"  {'NULL (forest)':<12}: {int((~valid).sum()):>6}")
+
+    print(f"\nBaue GPKG auf: {GPKG_DST}")
+    first = True
+    for lname in list_layers(GPKG_SRC):
+        lgdf = gdf if lname == 'Strassen' else gpd.read_file(GPKG_SRC, layer=lname)
+        lgdf.to_file(GPKG_DST, layer=lname, driver='GPKG', mode='w' if first else 'a')
+        first = False
+        print(f"  {lname}: {len(lgdf)}")
+
+    base = ['osm_id','name','fclass','fclass_display','correction_note',
+            'length_m','bridge','tunnel',
+            'utci_avg_winter','utci_class_winter','geometry']
+    gdf[[c for c in base if c in gdf.columns]].to_file(
+        GPKG_DST, layer='Strassen_UTCI_Winter', driver='GPKG', mode='a')
+    print(f"  Strassen_UTCI_Winter: {len(gdf)}")
+
+    print("\nMigriere layer_styles...")
+    migrate_styles(GPKG_SRC, GPKG_DST)
+    print("  Hinweis: Style fuer Strassen_UTCI_Winter -> Script 38b (QGIS Console)")
+
+    print(f"\nFertig: {GPKG_DST}")
+    print(f"Gesamtlaufzeit: {(time.time()-t_start)/60:.1f} Minuten")
+
+
+if __name__ == '__main__':
+    script_38_winter_utci()

@@ -1,0 +1,141 @@
+# REFERENCE SNAPSHOT ONLY — NOT A RUNNABLE PIPELINE
+# Historical source: script_29_baeume_ndom1_v2.py
+# Paths redacted; unsupported source/standards assertions annotated.
+# Do not execute against the final atlas. See ../README.md and ../METHOD_REVIEW.md.
+
+# script_29_baeume_ndom1_v2.py
+# Änderungen gegenüber v1:
+# - MAX_RADIUS: 8 → 15 (Stuttgart Platanen/Linden bis 12-15m Kronenradius)
+# - THRESHOLD: 0.3 → 0.5 (Half-Maximum-Methode, LiDAR-Standard)
+# Alle anderen Parameter unverändert.
+
+import geopandas as gpd
+import numpy as np
+from osgeo import gdal
+from shapely.geometry import Point
+import os
+
+GPKG_BAEUME_SRC = r"<LOCAL_PATH>/Baeume_Stuttgart.gpkg"
+VRT_NDOM1       = r"<LOCAL_PATH>/ndom1_stuttgart.vrt"
+GPKG_OUT        = r"<LOCAL_PATH>/Baeume_Stuttgart_v2.gpkg"
+
+MAX_H      = 25.0   # unverändert
+MAX_RADIUS = 15.0   # neu: war 8m
+THRESHOLD  = 0.5    # neu: Half-Maximum (war 0.3)
+SAMPLE_R   = 2.0    # unverändert
+
+ds   = gdal.Open(VRT_NDOM1)
+band = ds.GetRasterBand(1)
+gt   = ds.GetGeoTransform()
+xsize = ds.RasterXSize
+ysize = ds.RasterYSize
+
+def world_to_pixel(x, y):
+    col = int((x - gt[0]) / gt[1])
+    row = int((y - gt[3]) / gt[5])
+    return col, row
+
+def sample_max_in_radius(x, y, radius, arr):
+    col, row = world_to_pixel(x, y)
+    px_r = int(np.ceil(radius / abs(gt[1])))
+    c0, c1 = max(0, col-px_r), min(xsize, col+px_r+1)
+    r0, r1 = max(0, row-px_r), min(ysize, row+px_r+1)
+    if c0 >= c1 or r0 >= r1:
+        return None
+    patch = arr[r0:r1, c0:c1]
+    # Kreismaske
+    cols_idx = np.arange(c0, c1)
+    rows_idx = np.arange(r0, r1)
+    cc, rr = np.meshgrid(cols_idx, rows_idx)
+    wx = gt[0] + cc * gt[1]
+    wy = gt[3] + rr * gt[5]
+    dist = np.sqrt((wx - x)**2 + (wy - y)**2)
+    mask = dist <= radius
+    vals = patch[mask]
+    vals = vals[vals > 0]
+    return float(np.max(vals)) if len(vals) > 0 else None
+
+def get_crown_radius(x, y, h, arr):
+    """
+    Radiale Suche nach außen. Stoppt wenn nDOM1 < h * THRESHOLD (Half-Maximum).
+    Gibt größte Distanz zurück wo noch Kronensignal vorhanden.
+    """
+    px_size = abs(gt[1])
+    radii = np.arange(px_size, MAX_RADIUS + px_size, px_size)
+    last_valid = 0.0
+    col0, row0 = world_to_pixel(x, y)
+
+    for r in radii:
+        px_r = int(np.ceil(r / px_size))
+        c0 = max(0, col0 - px_r); c1 = min(xsize, col0 + px_r + 1)
+        r0 = max(0, row0 - px_r); r1 = min(ysize, row0 + px_r + 1)
+        if c0 >= c1 or r0 >= r1:
+            break
+        patch = arr[r0:r1, c0:c1]
+        cols_idx = np.arange(c0, c1); rows_idx = np.arange(r0, r1)
+        cc, rr = np.meshgrid(cols_idx, rows_idx)
+        wx = gt[0] + cc * gt[1]; wy = gt[3] + rr * gt[5]
+        dist = np.sqrt((wx - x)**2 + (wy - y)**2)
+        # Ring: zwischen r-px_size und r
+        ring_mask = (dist > r - px_size) & (dist <= r)
+        ring_vals = patch[ring_mask]
+        ring_vals = ring_vals[ring_vals > 0]
+        if len(ring_vals) == 0:
+            break
+        if np.max(ring_vals) >= h * THRESHOLD:
+            last_valid = r
+        else:
+            break  # sobald Ring unter Threshold: Suche beenden
+
+    return round(last_valid, 1) if last_valid > 0 else 1.0
+
+print("Lade Baeume...")
+gdf = gpd.read_file(GPKG_BAEUME_SRC, layer='Baeume')
+gdf = gdf.to_crs(epsg=25832)
+
+print("Lade nDOM1 VRT in RAM...")
+arr = band.ReadAsArray()
+
+print(f"Berechne Baumhöhen und Kronenradien (MAX_RADIUS={MAX_RADIUS}m, THRESHOLD={THRESHOLD})...")
+heights = []
+crown_radii = []
+
+for idx, row in gdf.iterrows():
+    x, y = row.geometry.x, row.geometry.y
+
+    # Höhe: OSM hat Vorrang
+    if row.get('height') and float(row['height']) > 0:
+        h = min(float(row['height']), MAX_H)
+    else:
+        h_ndom = sample_max_in_radius(x, y, SAMPLE_R, arr)
+        h = min(h_ndom, MAX_H) if h_ndom and h_ndom >= 1.5 else None
+
+    heights.append(h)
+
+    # Kronenradius: OSM hat Vorrang
+    if row.get('diameter_crown') and float(row['diameter_crown']) > 0:
+        cr = float(row['diameter_crown']) / 2.0
+    elif h:
+        cr = get_crown_radius(x, y, h, arr)
+    else:
+        cr = None
+
+    crown_radii.append(cr)
+
+    if idx % 1000 == 0:
+        print(f"  {idx}/{len(gdf)}")
+
+gdf['height_calculated'] = heights
+gdf['crown_radius']      = crown_radii
+
+# Statistik
+cr_vals = [v for v in crown_radii if v is not None]
+print(f"\nKronenradius-Statistik (n={len(cr_vals)}):")
+print(f"  Ø    {np.mean(cr_vals):.1f}m")
+print(f"  Min  {np.min(cr_vals):.1f}m")
+print(f"  Max  {np.max(cr_vals):.1f}m")
+print(f"  @15m {sum(1 for v in cr_vals if v >= 14.9)} Bäume (Suchgrenze)")
+
+print(f"\nSpeichere nach {GPKG_OUT}...")
+gdf.to_file(GPKG_OUT, layer='Baeume', driver='GPKG')
+print("Fertig.")
