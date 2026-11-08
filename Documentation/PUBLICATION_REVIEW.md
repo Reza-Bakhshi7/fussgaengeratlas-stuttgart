@@ -14,7 +14,7 @@ The author authorised a public GitHub research snapshot. Zenodo submission and D
 - Both Word handbooks were updated and rendered for layout review. Intentional author credit was retained; misleading template dates and generator descriptions were removed. No comments or tracked changes were detected. Noise-indicator uncertainty, approximate solar timing and UTCI averaging are stated explicitly.
 - The supplied LGL licence establishes dl-de/by-2-0 and its provider wording. Official OSM, MobiData BW/BFRK, Stuttgart noise and BKG product terms were checked. Supplied companion files and boundary metadata were inspected. Exact historical input versions are distinguished from current catalogue metadata.
 - All eleven map SVGs were replaced by original geometric drawings, separately marked CC0 1.0. Earlier Icons8/JOSM/other working paths are excluded from the public baseline. The embedded favourite-arrow reference uses the replacement file; the embedded style database passes integrity checks.
-- The supplied wind raster has no publisher or licence metadata and could not be matched reliably to a catalogue record. Its raw file is excluded from the public tree; technical identity and the provenance gap are retained. The derived atlas wind index remains part of the unchanged analytical dataset, with this limitation disclosed.
+- Wind source resolved on 8 November 2026: the supplied raster is a value-identical Stuttgart clip of the LUBW Klimaatlas BW wind field (dl-de/by-2-0) and is now included. Boundary source corrected to BKG VG25 (CC BY 4.0). The derived atlas data were not changed.
 
 ## Public history and checksums
 
@@ -24,7 +24,7 @@ MANIFEST_SHA256.txt identifies the listed delivery and documentation files. Addi
 
 ## Remaining limits
 
-1. Locate the original wind catalogue record, publisher, units, period and licence. Preserve the exact boundary product/download record and historical input versions for a reproducible rerun. See SOURCES_AND_RIGHTS.md and Documentation/SOURCE_REGISTER.csv.
+1. Read the physical unit and time step of the LUBW wind band 1 from the final report (https://pd.lubw.de/10677). Preserve historical input versions for a reproducible rerun. See SOURCES_AND_RIGHTS.md and Documentation/SOURCE_REGISTER.csv.
 2. Agree institutional attribution and author rights before a later Zenodo submission. No blanket licence for the mixed-source database or institutional endorsement is asserted.
 3. Interpret the atlas as an analytical research edition. Extreme slopes, unknown surfaces, scenario assumptions, noise-indicator uncertainty and historical algorithm variants are described in methods/METHOD_REVIEW.md.
 4. A fresh QGIS GUI session, full geometry/topology audit, full upstream model rerun and review of external photograph contents remain outside the completed checks.

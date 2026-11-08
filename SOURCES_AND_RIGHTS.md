@@ -1,6 +1,6 @@
 # Sources, attribution and reuse conditions
 
-Reviewed on 27 October 2026. The atlas is a mixed-source research dataset. The author has authorised public GitHub access; final institutional attribution and a Zenodo archive are being discussed separately. This file does not claim institutional endorsement or replace source-specific terms.
+Reviewed on 27 October 2026; wind, noise and boundary sources updated on 8 November 2026. The atlas is a mixed-source research dataset. The author has authorised public GitHub access; final institutional attribution and a Zenodo archive are being discussed separately. This file does not claim institutional endorsement or replace source-specific terms.
 
 ## OpenStreetMap / Geofabrik
 
@@ -22,19 +22,23 @@ Modification notice: selected terrain/surface data were processed to derive endp
 
 ## Stuttgart noise mapping
 
-**Datenquelle: Landeshauptstadt Stuttgart, Amt für Umweltschutz – Lärmkartierung Stuttgart (INSPIRE)**, [official dataset profile](https://opendata.stuttgart.de/de/dataset/laermkartierung), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The portal lists road, rail and industrial noise resources. Attribution and modification notice: the atlas assigns selected source polygons to segment centroids, retains the highest matching value per source and combines available values logarithmically. This derived combination is not an official overall-noise map. The exact historical imported indicator/resource and download date must be distinguished from the current catalogue record.
+**Datenquelle: Landeshauptstadt Stuttgart, Amt für Umweltschutz – Lärmkartierung Stuttgart (INSPIRE)**, [official dataset profile](https://opendata.stuttgart.de/de/dataset/laermkartierung), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The portal lists road, rail and industrial noise resources. Technical provision: INSPIRE WFS/WMS via geodienste.komm.one (Komm.ONE). The corresponding [GDI-DE metadata record](https://gdk.gdi-de.org/geonetwork/srv/api/records/4a34c08b-68c1-420b-b78b-a202f15b07e6) states no access or use restrictions; the atlas follows the stricter CC BY 4.0 attribution. The values reproduce the noise mapping and are not legally binding information. Attribution and modification notice: the atlas assigns selected source polygons to segment centroids, retains the highest matching value per source and combines available values logarithmically. This derived combination is not an official overall-noise map. The exact historical imported indicator/resource and download date must be distinguished from the current catalogue record.
 
 ## Stuttgart administrative boundary
 
-The supplied extract carries a BKG object identifier (DEBKGVGB0000040J), AGS 08111000 and metadata text 2024-12-31, consistent with the BKG administrative-area data. [VG250 product information for 31 December 2024](https://www.bkg.bund.de/SharedDocs/Produktinformationen/BKG/DE/P-2025/250911_VG250.html) and [official VG250 reuse conditions](https://sgx.geodatenzentrum.de/web_public/gdz/lizenz/deu/nutzungsbedingungen_vg250.pdf) identify dl-de/by-2-0.
+Source: Bundesamt für Kartographie und Geodäsie (BKG), [Verwaltungsgebiete 1:25 000, Stand 31.12. (VG25)](https://gdz.bkg.bund.de/index.php/default/verwaltungsgebiete-1-25-000-stand-31-12-vg25.html). The supplied extract carries the BKG object identifier DEBKGVGB0000040J, AGS 08111000 and metadata text 2024-12-31. The BKG product page provides VG25 free of charge under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) ([terms and credit](https://sgx.geodatenzentrum.de/web_public/gdz/lizenz/deu/nutzungsbedingungen_vg25.pdf)); BKG states that the credit on the [OpenStreetMap contributors page](https://wiki.openstreetmap.org/wiki/Contributors) is an appropriate form for OSM use.
 
-Credit: **© [BKG](https://www.bkg.bund.de) 2026, [dl-de/by-2-0](https://www.govdata.de/dl-de/by-2-0), [Datenquellen](https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg_nuts.pdf)**. Modification notice: Stuttgart municipality selected, exported and used as the study boundary. The original product/download record should still be retained to substantiate the exact product identification; the historical internal delivery route is not the original authorship.
+Credit: **© [BKG](https://www.bkg.bund.de) (2026) [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), Datenquellen: https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf**. Modification notice: Stuttgart municipality selected, exported and used as the study boundary.
 
-## Wind raster — remaining source-record gap
+## Wind raster
 
-The author identifies the historical access route as daten.bw.de. The supplied Wind.tif is technically identifiable as a 21×20-cell, two-band, 1,000-metre grid in EPSG:25832. Embedded band labels refer to WIndfeldaggregiertauf1000m; they do not identify the publisher, physical unit, period or licence. Exact-name web searches did not produce a verifiable matching catalogue record.
+Source: LUBW Landesanstalt für Umwelt Baden-Württemberg, Kompetenzzentrum Klimawandel, landesweite Klimaanalyse of the [Klimaatlas BW](https://www.klimaatlas-bw.de/download) (map 13, wind speed and direction, aggregated to 1,000 m). Original file: `klimaanalyse/land/klimaanalysekarten/13_windgeschwindigkeitundwindrichtung/windfeldaggregiertauf1000m.tif` on the [Klimaatlas download server](https://ftp.inovum-dev.de/#/publiziert/klimaatlas_lubw/klimaanalyse/); [LUBW metadata](https://rips-metadaten.lubw.de/freitextsuche?rstart=0&currentSelectorPage=1&f=metadata_tree%3Ametadata_tree_69785b0e-191e-4724-93e9-6f2fcd48f7a9). The download page licenses the climate data under dl-de/by-2-0 for commercial and non-commercial use; the [LUBW disclaimer](https://www.klimaatlas-bw.de/impressum) applies.
 
-**No provider or open licence is invented for this file.** Its source record remains an explicit gap in the author’s provenance information. The raw raster is withheld from the public baseline; its byte identity is retained in source_metadata/INVENTORY.csv. Redistribution and downstream reuse must not be inferred to be cleared by a generic state-portal licence. The atlas wind theme remains an unchanged heuristic derived index, not measured wind speed; its underlying source-record gap remains relevant to reuse. The source register keeps this issue visible while the author locates the original catalogue link.
+Verified on 8 November 2026: the supplied Wind.tif is a Stuttgart clip of that LUBW file. All 261 cells per band with values are identical to the LUBW grid at the same 1,000-metre positions; cells outside the clip were set to empty.
+
+Credit: **Datengrundlage: Klimaatlas BW der LUBW ([www.klimaatlas-bw.de](https://www.klimaatlas-bw.de)), [Datenlizenz Deutschland – Namensnennung – Version 2.0](https://www.govdata.de/dl-de/by-2-0), 2026. Daten verändert.** Modification notice: clipped to Stuttgart and processed into the relative wind-exposure index of the atlas.
+
+Interpretation: the Klimaatlas analysis describes a calm, cloudless (autochthonous) night situation and supports relative statements. The physical unit and time step of band 1 are documented in the [final report](https://pd.lubw.de/10677), not in the file; the atlas uses band 1 only as a relative input and does not present it as measured wind speed. The supplied raster is included in source_metadata/wind.
 
 ## Symbols and original project material
 

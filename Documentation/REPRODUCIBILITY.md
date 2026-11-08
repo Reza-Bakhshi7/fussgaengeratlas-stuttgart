@@ -8,7 +8,7 @@ The QGZ, reconstructed GPKG, QML/SVG files, user documentation, source register 
 
 The source_metadata directory contains the extracts and companion metadata supplied by the author. DGM1/nDOM1 raster tiles themselves are not included. The LGL inventories identify the supplied companion filenames; exact consumed input files, hashes and final processing-run linkage are not established solely by those lists.
 
-The supplied OSM roads ZIP contains a DBF attribute table only, without matching shapefile geometry components. The wind raw raster is withheld pending source identification. These supplied materials therefore do not constitute a complete upstream rebuild kit.
+The supplied OSM roads ZIP contains a DBF attribute table only, without matching shapefile geometry components. These supplied materials therefore do not constitute a complete upstream rebuild kit.
 
 ## Methods
 

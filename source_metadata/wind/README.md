@@ -1,9 +1,11 @@
-# Supplied wind input: technical identity and source gap
+# Supplied wind input
 
-The author supplied Wind.tif (3,766 bytes), historically named 08111_windfeldaggregiertauf1000m.tif. Technical TIFF tags confirm 21 columns × 20 rows, two Float32 bands, EPSG:25832, 1,000-metre pixels and upper-left origin E=502636, N=5413217.
+Wind.tif (3,766 bytes), historically named 08111_windfeldaggregiertauf1000m.tif: two Float32 bands, 21 columns × 20 rows, 1,000-metre pixels, EPSG:25832, upper-left origin E=502636, N=5413217. Band 1: wind speed of the analysis (range 0.0053–0.9590); band 2: wind direction in degrees (0.55–358.36). Empty cells lie outside the Stuttgart clip.
 
-Embedded band labels: WIndfeldaggregiertauf1000m_1 and WIndfeldaggregiertauf1000m_2. Embedded statistics report band 1 approximately 0.005315–0.959029 and band 2 approximately 0.554949–358.360168. These are stored statistics, not independently recomputed observations. The file contains no publisher, source URL, reference period or licence string.
+Source: LUBW Klimaatlas BW, landesweite Klimaanalyse, map 13 (windfeldaggregiertauf1000m.tif, 234 × 261 cells for Baden-Württemberg), https://www.klimaatlas-bw.de/download . On 8 November 2026 every value of this file was compared with the LUBW original at the same grid positions: all 261 cells per band are identical.
 
-The historical access route is recorded as daten.bw.de. Exact-name searches did not identify a verifiable matching public catalogue record. Do not infer a licence or interpret band 1 as m/s. The source-record gap remains listed in ../../SOURCES_AND_RIGHTS.md; no assertion of full clearance is made.
+Licence: Datenlizenz Deutschland – Namensnennung – Version 2.0, https://www.govdata.de/dl-de/by-2-0 .
 
-The raw Wind.tif is not distributed in the public baseline. Its byte identity is retained in ../INVENTORY.csv as a withheld input. The derived atlas index remains unchanged and carries the documented interpretation and provenance limits.
+Credit: Datengrundlage: Klimaatlas BW der LUBW (www.klimaatlas-bw.de), Datenlizenz Deutschland – Namensnennung – Version 2.0, 2026. Daten verändert: auf Stuttgart zugeschnitten und zu einem Wind-Expositionsindex weiterverarbeitet.
+
+Use band 1 as a relative input only; its unit and time step are described in the LUBW final report https://pd.lubw.de/10677 .

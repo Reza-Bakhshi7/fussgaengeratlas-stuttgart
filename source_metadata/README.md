@@ -4,7 +4,7 @@ This directory contains source extracts and companion metadata supplied for the 
 
 Source credits, terms and verification status: ../SOURCES_AND_RIGHTS.md. File identities and sizes are recorded in INVENTORY.csv; a Git blob SHA is an object identifier, not a standalone file SHA-256.
 
-- wind/: technical identity of the supplied two-band 1-km raster; the raw file is withheld until its original catalogue record and redistribution terms are identified.
+- wind/: supplied two-band 1-km raster, a Stuttgart clip of the LUBW Klimaatlas BW wind field (dl-de/by-2-0).
 - lgl/: DGM1/nDOM1 companions, tile inventories and licence evidence; no full terrain raster mosaic.
 - noise/: supplied road, rail and industrial noise polygon extracts.
 - osm/: supplied OSM extracts and Geofabrik source package.
