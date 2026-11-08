@@ -6,7 +6,7 @@ Reviewed on 27 October 2026; wind, noise and boundary sources updated on 8 Novem
 
 **© OpenStreetMap contributors.** OSM-derived data are subject to the [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/) and [OSM attribution requirements](https://www.openstreetmap.org/copyright). Regional extract provider: [Geofabrik](https://download.geofabrik.de/europe/germany/baden-wuerttemberg.html).
 
-Atlas changes include spatial selection, segmentation/cleanup, added attributes and thematic derivations. ODbL share-alike obligations for a derived database are not removed by this repository or by later DOI registration. Separate original-source credits below must also be retained. The supplied source extracts are catalogued in source_metadata/osm; their exact historical download dates are not inferred from current portal pages.
+Atlas changes include spatial selection, segmentation/cleanup, added attributes and thematic derivations. As a derived database of OpenStreetMap, the atlas database (`data/` and the restored GeoPackage) is made available under the [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/). The credits and conditions of the other sources below continue to apply to their contents. Separate original-source credits below must also be retained. The supplied source extracts are catalogued in source_metadata/osm; their exact historical download dates are not inferred from current portal pages.
 
 ## LGL DGM1 / nDOM1
 

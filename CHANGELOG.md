@@ -1,5 +1,9 @@
 # Changelog
 
+## Authorship and database licence — 8 November 2026
+
+Author line clarified (author and owner Mohammadreza Bakhshi, with occasional support from the MobiData BW team); organisation labels removed from method reference headers and handbook title pages. The atlas database is stated to be available under ODbL 1.0 as an OpenStreetMap derived database. Checksums updated; atlas data unchanged.
+
 ## Public repository review — 8 November 2026
 
 Removed internal process notes (planned coordination of archive metadata) from README, publication notes, licence scope, source rights and both handbooks. Checksums updated; atlas data unchanged.

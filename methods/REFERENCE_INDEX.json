@@ -3,11 +3,12 @@
     "original_filename": "script_28_wind_expositionsindex.py",
     "reference_file": "reference/01_wind_exposure.py.txt",
     "original_sha256": "69f02a70eec003443df23ab138546cf17c5f4ead2669a3c265781b77473cd4e4",
-    "published_sha256": "5a88513c1430981c78c3c5a995e099b406cb555f7b0401e0f0bd30fe108bb553",
+    "published_sha256": "adc1a0e3cab6a6466d11be20fc7ced5cf4fdd9a7b793e7d4dbea1591beac770e",
     "modifications": [
       "Internal absolute paths replaced",
       "Review banner added",
-      "Unsupported claims annotated where present"
+      "Unsupported claims annotated where present",
+      "Organisation label removed from the author line"
     ],
     "status": "Historical reference; not verified as exact final production version"
   },
@@ -27,11 +28,12 @@
     "original_filename": "script_32_neue_gpkg_22072026.py",
     "reference_file": "reference/03_summer_shade_utci.py.txt",
     "original_sha256": "652e72ad6d0268d0ec3c63c8f7b21bec016c63603dd0f94fae4ce3aefe2a152d",
-    "published_sha256": "0f4d9a4ff9cf34738b57c3053456c7f72a7399c1ce4c1a6d4080dd30c9c047a3",
+    "published_sha256": "5b4f1f272680c8a26c444e2e3a8db655cef16b70a2d69171e482e2c043ba8882",
     "modifications": [
       "Internal absolute paths replaced",
       "Review banner added",
-      "Unsupported claims annotated where present"
+      "Unsupported claims annotated where present",
+      "Organisation label removed from the author line"
     ],
     "status": "Historical reference; not verified as exact final production version"
   },
@@ -39,11 +41,12 @@
     "original_filename": "script_34_bodenbelag.py",
     "reference_file": "reference/04_surface_classification.py.txt",
     "original_sha256": "8879883c27b4bda5c253417463012eb1d3bb4dd99e3bef41c2279596bd39f35f",
-    "published_sha256": "e9afc06b5e4b007bf23acee24e08b7131d2725a32ac476488811bb710d5be913",
+    "published_sha256": "f8d953d0a82ceb247002110561e5a08d9c2d145d8bf10e4e79a4f3a09be41481",
     "modifications": [
       "Internal absolute paths replaced",
       "Review banner added",
-      "Unsupported claims annotated where present"
+      "Unsupported claims annotated where present",
+      "Organisation label removed from the author line"
     ],
     "status": "Historical reference; not verified as exact final production version"
   },
@@ -63,11 +66,12 @@
     "original_filename": "script_37_winterschatten_v5.py",
     "reference_file": "reference/06_winter_shade.py.txt",
     "original_sha256": "18009aca3ce14a0b358aac4e698bf57b8097e93256855fa602cf51bb8c965df5",
-    "published_sha256": "c627abdea69f76b717806d19409531f8b3eaf87234d57706050b93f4b7557832",
+    "published_sha256": "3a4059dea0f5053f22a6c5d05845aec56b598c975b8e877db023fd62337bafd2",
     "modifications": [
       "Internal absolute paths replaced",
       "Review banner added",
-      "Unsupported claims annotated where present"
+      "Unsupported claims annotated where present",
+      "Organisation label removed from the author line"
     ],
     "status": "Historical reference; not verified as exact final production version"
   },
@@ -75,11 +79,12 @@
     "original_filename": "script_38_winter_utci.py",
     "reference_file": "reference/07_winter_utci.py.txt",
     "original_sha256": "5704fca9a0a57bad36ffac2f3fd47397c5ebbdbe52939aaeda3ae3e3f6f39172",
-    "published_sha256": "2e51652704a389281e4ec7e53cc72af8425fc80c633dab3d632b296bf7b029df",
+    "published_sha256": "aeb3748c20cb9cff3c985bca67632bc33f227ce0a27394883416af848f0c65ae",
     "modifications": [
       "Internal absolute paths replaced",
       "Review banner added",
-      "Unsupported claims annotated where present"
+      "Unsupported claims annotated where present",
+      "Organisation label removed from the author line"
     ],
     "status": "Historical reference; not verified as exact final production version"
   },

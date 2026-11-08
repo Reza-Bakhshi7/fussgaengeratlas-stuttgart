@@ -6,7 +6,7 @@
 """
 ================================================================================
 Script 28 — Wind-Expositions-Index
-Fußgängeratlas Stuttgart | Reza Bakhshi | NVBW / MobiDataBW
+Fußgängeratlas Stuttgart | Mohammadreza Bakhshi
 Stand: 16.07.2026
 ================================================================================
 

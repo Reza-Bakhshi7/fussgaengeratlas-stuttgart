@@ -6,7 +6,7 @@
 """
 ================================================================================
 Script 37 v5 — Winter-Schattenmodell Stuttgart (FINAL)
-Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+Bearbeiter: Mohammadreza Bakhshi
 Datum: 30.07.2026
 ================================================================================
 Referenzdatum: 21. Dezember (Wintersonnenwende)

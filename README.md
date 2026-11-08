@@ -35,7 +35,7 @@ This is an analytical dataset, not a guarantee of an accessible route. Slope is 
 
 ## Authorship and context
 
-Development and GIS processing: Mohammadreza Bakhshi. Work was carried out partly during his student employment in the MobiData BW context, with individual technical suggestions from the team. This statement does not imply institutional endorsement or joint authorship. Source organisations are credited for their datasets in the source documentation.
+Author and owner: **Mohammadreza Bakhshi**. Developed with occasional support from the MobiData BW team during his student employment. Source-specific data rights remain unchanged.
 
 ## Citation and status
 

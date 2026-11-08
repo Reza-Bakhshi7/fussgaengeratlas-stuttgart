@@ -5,7 +5,7 @@
 
 """
 Script 32 — Neue GPKG 22072026 erstellen + Schatten + UTCI aktualisieren
-Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+Bearbeiter: Mohammadreza Bakhshi
 Stand: 22.07.2026
 
 Quelle:  Fussgaengeratlas_17072026.gpkg (wird NICHT verändert)

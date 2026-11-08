@@ -5,7 +5,7 @@
 
 # Script 34 — Bodenbelag-Klassifikation
 # Fußgängeratlas Stuttgart
-# Bearbeiter: Reza Bakhshi | NVBW / MobiDataBW
+# Bearbeiter: Mohammadreza Bakhshi
 # Datum: 23.07.2026
 # Ausführung: OSGeo4W Shell
 #
