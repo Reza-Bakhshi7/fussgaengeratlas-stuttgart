@@ -1,5 +1,9 @@
 # Changelog
 
+## Sources and licences — 8 November 2026
+
+Wind source resolved: the supplied raster is a value-identical Stuttgart clip of the LUBW Klimaatlas BW wind field (dl-de/by-2-0), now included in source_metadata/wind. Municipal boundary attributed to BKG VG25 under CC BY 4.0. Noise evidence extended by the GDI-DE record. Sources, registers, handbooks and checksums updated; atlas data unchanged.
+
 ## Repository preparation — 26 October 2026
 
 Imported the supplied portable atlas package, documented as dated 15 September 2026. Added lossless compressed data storage and restoration, layer/field inventory, source-rights register, citation draft, terrain notes and current technical checks. Data values and original QGIS/style files were not changed. Original reports remain historical evidence.
