@@ -39,7 +39,7 @@ Development and GIS processing: Mohammadreza Bakhshi. Work was carried out partl
 
 ## Citation and status
 
-The data package is documented as dated **15 September 2026**; repository preparation on 26 October 2026 is not a data refresh. `CITATION.cff` contains dataset citation metadata for this repository snapshot. **No DOI has been assigned.** Zenodo submission is deliberately deferred while the author agrees the institutional publication context and final archiving metadata with colleagues.
+The data package is documented as dated **15 September 2026**; repository preparation on 26 October 2026 is not a data refresh. `CITATION.cff` contains dataset citation metadata for this repository snapshot. **No DOI has been assigned.** Zenodo archiving is deferred.
 
 The related application is available at https://sonnenpfad-stuttgart.de/; its source and deployment are maintained separately.
 

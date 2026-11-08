@@ -2,7 +2,7 @@
 
 ## Publication scope
 
-The author authorised a public GitHub research snapshot. Zenodo submission and DOI registration are deferred while institutional attribution and archive metadata are discussed. This review records completed checks and remaining limits; it is not a guarantee of complete legal clearance, absence of personal data or scientific correctness.
+The author authorised a public GitHub research snapshot. Zenodo submission and DOI registration are deferred. This review records completed checks and remaining limits; it is not a guarantee of complete legal clearance, absence of personal data or scientific correctness.
 
 ## Completed checks
 
@@ -25,7 +25,7 @@ MANIFEST_SHA256.txt identifies the listed delivery and documentation files. Addi
 ## Remaining limits
 
 1. Read the physical unit and time step of the LUBW wind band 1 from the final report (https://pd.lubw.de/10677). Preserve historical input versions for a reproducible rerun. See SOURCES_AND_RIGHTS.md and Documentation/SOURCE_REGISTER.csv.
-2. Agree institutional attribution and author rights before a later Zenodo submission. No blanket licence for the mixed-source database or institutional endorsement is asserted.
+2. Confirm attribution and author rights before a later Zenodo submission. No blanket licence for the mixed-source database or institutional endorsement is asserted.
 3. Interpret the atlas as an analytical research edition. Extreme slopes, unknown surfaces, scenario assumptions, noise-indicator uncertainty and historical algorithm variants are described in methods/METHOD_REVIEW.md.
 4. A fresh QGIS GUI session, full geometry/topology audit, full upstream model rerun and review of external photograph contents remain outside the completed checks.
 

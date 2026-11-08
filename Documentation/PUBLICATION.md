@@ -1,8 +1,8 @@
 # Public repository and deferred Zenodo archive
 
-The author has requested public GitHub access so supervisors and other readers can inspect the atlas. This is a documented research snapshot, not a certification of accessibility or scientific accuracy.
+The atlas is published on GitHub as a documented research snapshot, not a certification of accessibility or scientific accuracy.
 
-Zenodo submission and DOI registration are **not performed**. The author will first agree the institutional publication context, attribution and final archiving metadata with colleagues. No institutional endorsement or joint authorship is claimed.
+Zenodo archiving and DOI registration have **not been performed yet**. No institutional endorsement or joint authorship is claimed.
 
 The fixed data-processing status remains 15 September 2026. Packaging, symbol replacement and source documentation dated 27 October 2026 do not refresh source observations or recalculate model values.
 

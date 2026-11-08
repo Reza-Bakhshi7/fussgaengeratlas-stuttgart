@@ -1,6 +1,6 @@
 # Sources, attribution and reuse conditions
 
-Reviewed on 27 October 2026; wind, noise and boundary sources updated on 8 November 2026. The atlas is a mixed-source research dataset. The author has authorised public GitHub access; final institutional attribution and a Zenodo archive are being discussed separately. This file does not claim institutional endorsement or replace source-specific terms.
+Reviewed on 27 October 2026; wind, noise and boundary sources updated on 8 November 2026. The atlas is a mixed-source research dataset. It is published as a public GitHub research snapshot; a Zenodo archive is deferred. This file does not claim institutional endorsement or replace source-specific terms.
 
 ## OpenStreetMap / Geofabrik
 
